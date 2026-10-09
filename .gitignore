@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PyInstaller
+build/
+dist/
+*.manifest
+
+# Test / session leftovers
+_test_qr.png
+_capture*.png
+smoke*.txt
+func*.txt
+
+# IDE / OS
+.vscode/*
+!.vscode/settings.json
+*.code-workspace
+Thumbs.db
+Desktop.ini

@@ -68,13 +68,13 @@ class GeneratePage(ctk.CTkFrame):
 
         self.hero = HeroSection(
             self.left,
-            title="⚡ Generate Beautiful QR Codes", 
-            subtitle="Create custom QR codes with logos, colors, and export options."
+            title="Design your QR code",
+            subtitle="Enter your content, then customize colors and add a logo."
         )
 
         self.hero.pack(
             fill="x",
-            pady=(0, 20),
+            pady=(0, 16),
         )
 
         # ==========================================

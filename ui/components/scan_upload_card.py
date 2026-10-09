@@ -5,6 +5,7 @@ from tkinter import filedialog
 from PIL import Image
 
 from utils.theme_manager import ThemeManager
+from ui import icons
 
 class ScanUploadCard(ctk.CTkFrame):
 
@@ -100,8 +101,8 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.icon = ctk.CTkLabel(
             self.placeholder,
-            text="⬆",
-            font=("Segoe UI", 56),
+            text=icons.icon("image"),
+            font=icons.icon_font(52),
             text_color=theme["primary"]
         )
 
@@ -262,15 +263,15 @@ class ScanUploadCard(ctk.CTkFrame):
 
             self.clear_button = ctk.CTkButton(
                 self,
-                text="🗑  Clear Image",
-                width=170,
-                height=40,
-                corner_radius=20,
+                text=f"{icons.icon('delete')}  Clear Image",
+                width=180,
+                height=42,
+                corner_radius=12,
                 fg_color="transparent",
                 border_width=1,
                 hover_color=theme["card_hover"],
                 border_color=theme["border"],
-                text_color=theme["text"],
+                text_color=theme["danger"],
                 command=self.clear
             )
 
@@ -376,5 +377,5 @@ class ScanUploadCard(ctk.CTkFrame):
             self.clear_button.configure(
                 hover_color=theme["card_hover"],
                 border_color=theme["border"],
-                text_color=theme["text"]
+                text_color=theme["danger"]
             )

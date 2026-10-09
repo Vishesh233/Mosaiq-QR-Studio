@@ -43,8 +43,8 @@ class ContentCard(ctk.CTkFrame):
 
         self.title = ctk.CTkLabel(
             content_frame,
-            text="🔗  Content",
-            font=("Segoe UI", 18, "bold"),
+            text="Content",
+            font=("Segoe UI Semibold", 16),
             text_color=theme["text"]
         )
 

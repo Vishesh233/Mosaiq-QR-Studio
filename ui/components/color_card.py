@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter.colorchooser import askcolor
 
 from utils.theme_manager import ThemeManager
+from ui import icons
 
 
 class ColorCard(ctk.CTkFrame):
@@ -44,9 +45,9 @@ class ColorCard(ctk.CTkFrame):
 
         self.icon = ctk.CTkLabel(
             header,
-            text="🎨",
-            font=("Segoe UI", 16),
-            text_color=theme["text"]
+            text=icons.icon("theme"),
+            font=icons.icon_font(16),
+            text_color=theme["primary"]
         )
 
         self.icon.pack(side="left")
@@ -190,7 +191,7 @@ class ColorCard(ctk.CTkFrame):
         )
 
         self.icon.configure(
-            text_color=theme["text"]
+            text_color=theme["primary"]
         )
 
         self.title.configure(

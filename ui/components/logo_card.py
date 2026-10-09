@@ -5,6 +5,7 @@ from tkinter import filedialog
 from PIL import Image
 
 from utils.theme_manager import ThemeManager
+from ui import icons
 
 
 class LogoCard(ctk.CTkFrame):
@@ -49,7 +50,7 @@ class LogoCard(ctk.CTkFrame):
 
         self.title = ctk.CTkLabel(
             header,
-            text="🖼 Logo",
+            text="Logo",
             font=("Segoe UI Semibold", 16),
             text_color=theme["text"]
         )
@@ -93,9 +94,9 @@ class LogoCard(ctk.CTkFrame):
 
         self.icon = ctk.CTkLabel(
             self.upload_frame,
-            text="⬆",
-            font=("Segoe UI", 28),
-            text_color=theme["text"]
+            text=icons.icon("image"),
+            font=icons.icon_font(28),
+            text_color=theme["primary"]
         )
 
         self.icon.pack(
@@ -147,7 +148,7 @@ class LogoCard(ctk.CTkFrame):
         )
 
         self.icon.configure(
-            text_color=theme["text"]
+            text_color=theme["primary"]
         )
 
         self.title_label.configure(
@@ -213,7 +214,7 @@ class LogoCard(ctk.CTkFrame):
 
         self.icon.configure(
             image=None,
-            text="⬆"
+            text=icons.icon("image")
         )
 
         self.title_label.configure(

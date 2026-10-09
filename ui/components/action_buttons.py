@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
+from ui import icons
 
 
 class ActionButtons(ctk.CTkFrame):
@@ -29,14 +30,14 @@ class ActionButtons(ctk.CTkFrame):
 
         self.generate_btn = ctk.CTkButton(
             self,
-            text="Generate\nQR",
-            width=95,
-            height=54,
-            corner_radius=18,
+            text=f"{icons.icon('generate')}  Generate QR",
+            width=150,
+            height=48,
+            corner_radius=12,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
-            text_color="white",
-            font=("Segoe UI Semibold", 14),
+            text_color="#FFFFFF",
+            font=("Segoe UI Semibold", 13),
             command=self.on_generate
         )
 
@@ -51,10 +52,10 @@ class ActionButtons(ctk.CTkFrame):
 
         self.copy_btn = ctk.CTkButton(
             self,
-            text="📋 Copy",
-            width=85,
-            height=54,
-            corner_radius=18,
+            text=f"{icons.icon('copy')}  Copy",
+            width=110,
+            height=48,
+            corner_radius=12,
             fg_color=theme["card"],
             border_width=1,
             border_color=theme["border"],
@@ -76,10 +77,10 @@ class ActionButtons(ctk.CTkFrame):
 
         self.save_btn = ctk.CTkButton(
             self,
-            text="💾 Save As",
-            width=100,
-            height=54,
-            corner_radius=18,
+            text=f"{icons.icon('save')}  Save As",
+            width=120,
+            height=48,
+            corner_radius=12,
             fg_color=theme["card"],
             border_width=1,
             border_color=theme["border"],
@@ -101,15 +102,15 @@ class ActionButtons(ctk.CTkFrame):
 
         self.clear_btn = ctk.CTkButton(
             self,
-            text="🗑 Clear",
-            width=90,
-            height=54,
-            corner_radius=18,
+            text=f"{icons.icon('delete')}  Clear",
+            width=110,
+            height=48,
+            corner_radius=12,
             fg_color="transparent",
             border_width=1,
             border_color=theme["border"],
             hover_color=theme["card_hover"],
-            text_color="#f87171",
+            text_color=theme["danger"],
             font=("Segoe UI Semibold", 13),
             command=self.on_clear
         )
@@ -171,7 +172,8 @@ class ActionButtons(ctk.CTkFrame):
 
         self.clear_btn.configure(
             border_color=theme["border"],
-            hover_color=theme["card_hover"]
+            hover_color=theme["card_hover"],
+            text_color=theme["danger"]
         )
 
         # Preserve enabled/disabled text colors

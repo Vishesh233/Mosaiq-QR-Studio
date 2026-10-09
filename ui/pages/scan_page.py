@@ -38,10 +38,10 @@ class ScanPage(ctk.CTkFrame):
 
         self.hero = HeroSection(
             hero_wrapper,
-            title="Scan QR Codes",
+            title="Scan a QR code",
             subtitle=(
-                "Upload a QR code image to instantly decode URLs, "
-                "plain text and other supported QR content." 
+                "Upload an image to instantly decode URLs "
+                "and plain text." 
             ),
             
         )

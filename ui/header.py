@@ -1,149 +1,107 @@
 import customtkinter as ctk
 
-from config import (
-    APP_NAME,
-    APP_VERSION,
-)
-
 from utils.theme_manager import ThemeManager
 from ui.dialogs.settings_dialog import SettingsDialog
+from ui import icons
 
 
 class Header(ctk.CTkFrame):
+    """Premium top bar: contextual screen title/subtitle + actions.
+
+    Keeps the original settings entry point (open_settings) and the settings
+    button, and adds a live title/subtitle driven by the active screen.
+    """
 
     def __init__(self, parent):
-
         theme = ThemeManager.get_theme()
 
         super().__init__(
             parent,
+            height=64,
+            corner_radius=0,
             fg_color=theme["navbar"],
-            height=52,
-            corner_radius=0
         )
 
         self.pack_propagate(False)
 
-        # ---------------- Logo ---------------- #
+        self._title_label = None
+        self._subtitle_label = None
+        self._settings_btn = None
+        self._sep = None
 
-        self.logo = ctk.CTkLabel(
-            self,
-            text="▣",
-            font=("Segoe UI", 22),
-            text_color=theme["primary"]
-        )
-
-        self.logo.pack(
-            side="left",
-            padx=(18, 10)
-        )
-
-        # ---------------- App Name ---------------- #
-
-        self.title = ctk.CTkLabel(
-            self,
-            text=APP_NAME,
-            font=("Segoe UI", 16, "bold"),
-            text_color=theme["text"]
-        )
-
-        self.title.pack(side="left")
-
-        # ---------------- Version Badge ---------------- #
-
-        self.version = ctk.CTkLabel(
-            self,
-            text=APP_VERSION,
-            width=40,
-            height=22,
-            fg_color=theme["card"],
-            corner_radius=8,
-            font=("Segoe UI", 10),
-            text_color=theme["text_secondary"]
-        )
-
-        self.version.pack(
-            side="left",
-            padx=(10, 0)
-        )
-
-        # ---------------- Right Side ---------------- #
-
-        self.right_frame = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-
-        self.right_frame.pack(
-            side="right",
-            padx=15
-        )
-
-        # ---------------- Settings ---------------- #
-
-        self.settings_btn = ctk.CTkButton(
-            self.right_frame,
-            text="⚙",
-            width=32,
-            height=32,
-            fg_color="transparent",
-            hover_color=theme["card"],
-            command=self.open_settings
-        )
-
-        self.settings_btn.pack(
-            side="left",
-            padx=5
-        )
-
-        # ---------------- Theme ---------------- #
-
-        self.theme_btn = ctk.CTkButton(
-            self.right_frame,
-            text="☀",
-            width=32,
-            height=32,
-            fg_color="transparent",
-            hover_color=theme["card"]
-        )
-
-        self.theme_btn.pack(
-            side="left",
-            padx=5
-        )
+        self._build()
 
     # ==================================================
+    def _build(self):
+        theme = ThemeManager.get_theme()
 
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # ---------------- Left: title + subtitle ----------------
+        text_col = ctk.CTkFrame(self, fg_color="transparent")
+        text_col.grid(row=0, column=0, sticky="w", padx=(28, 0))
+
+        self._title_label = ctk.CTkLabel(
+            text_col,
+            text="Generate QR Code",
+            font=("Segoe UI Semibold", 20),
+            text_color=theme["text"],
+        )
+        self._title_label.grid(row=0, column=0, sticky="w")
+
+        self._subtitle_label = ctk.CTkLabel(
+            text_col,
+            text="Create a custom QR code from a URL or text.",
+            font=("Segoe UI", 12),
+            text_color=theme["text_secondary"],
+        )
+        self._subtitle_label.grid(row=1, column=0, sticky="w")
+
+        # ---------------- Right: actions ----------------
+        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions.grid(row=0, column=1, sticky="e", padx=(0, 24))
+
+        self._settings_btn = ctk.CTkButton(
+            actions,
+            text=icons.icon("settings"),
+            width=40, height=40,
+            corner_radius=10,
+            fg_color="transparent",
+            hover_color=theme["card_hover"],
+            text_color=theme["text_secondary"],
+            font=icons.icon_font(17),
+            command=self.open_settings,
+        )
+        self._settings_btn.grid(row=0, column=0, padx=(0, 8))
+
+        # Bottom hairline divider
+        self._sep = ctk.CTkFrame(self, height=1, fg_color=theme["border"])
+        self._sep.place(relx=0, rely=1.0, anchor="sw", relwidth=1.0)
+
+    # ==================================================
+    def set_title(self, title, subtitle=""):
+        if self._title_label is not None:
+            self._title_label.configure(text=title)
+        if self._subtitle_label is not None:
+            self._subtitle_label.configure(text=subtitle)
+
+    # ==================================================
     def open_settings(self):
         SettingsDialog(self)
 
     # ==================================================
-
     def refresh_theme(self):
-
         theme = ThemeManager.get_theme()
-
-        self.configure(
-            fg_color=theme["navbar"]
-        )
-
-        self.logo.configure(
-            text_color=theme["primary"]
-        )
-
-        self.title.configure(
-            text_color=theme["text"]
-        )
-
-        self.version.configure(
-            fg_color=theme["card"],
-            text_color=theme["text_secondary"]
-        )
-
-        self.settings_btn.configure(
-            hover_color=theme["card"]
-        )
-
-        self.theme_btn.configure(
-            hover_color=theme["card"]
-        )
+        self.configure(fg_color=theme["navbar"])
+        if self._title_label is not None:
+            self._title_label.configure(text_color=theme["text"])
+        if self._subtitle_label is not None:
+            self._subtitle_label.configure(text_color=theme["text_secondary"])
+        if self._settings_btn is not None:
+            self._settings_btn.configure(
+                hover_color=theme["card_hover"],
+                text_color=theme["text_secondary"],
+            )
+        if self._sep is not None:
+            self._sep.configure(fg_color=theme["border"])

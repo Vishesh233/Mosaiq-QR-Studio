@@ -2,6 +2,7 @@ import webbrowser
 import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
+from ui import icons
 
 
 class ScanResultCard(ctk.CTkFrame):
@@ -139,9 +140,9 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.icon = ctk.CTkLabel(
             self.content,
-            text="📄",
+            text=icons.icon("text"),
             width=24,
-            font=("Segoe UI", 20),
+            font=icons.icon_font(20),
             text_color=theme["text_secondary"]
         )
 
@@ -178,15 +179,15 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.copy_btn = ctk.CTkButton(
             self,
-            text=" 📋Copy Result",
-            width=180,
+            text=f"{icons.icon('copy')}  Copy Result",
+            width=200,
             height=46,
-            corner_radius=16,
-            border_width=1,
+            corner_radius=12,
+            border_width=0,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             border_color=theme["border"],
-            text_color=theme["text"],
+            text_color="#FFFFFF",
             state="disabled",
             command=self.on_copy,
             font=("Segoe UI Semibold", 14)
@@ -300,7 +301,7 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.result_label.configure(
             text= self.result,
-            text_color="#60A5FA",
+            text_color=theme["primary"],
             cursor="hand2"
 )
 
@@ -309,8 +310,8 @@ class ScanResultCard(ctk.CTkFrame):
         # ----------------------------
 
         self.icon.configure(
-            text="↗" if is_url else "📝",
-            text_color="#3B82F6" if is_url else "#D1D5DB"
+            text=icons.icon("link") if is_url else icons.icon("text"),
+            text_color=theme["primary"] if is_url else theme["text"]
         )
 
         # ----------------------------
@@ -320,13 +321,13 @@ class ScanResultCard(ctk.CTkFrame):
         if is_url:
 
             self.status_chip.configure(
-                text="🔗 URL Detected",
-                fg_color="#1E3A8A",
-                text_color="#DBEAFE"
+                text=f"{icons.icon('link')}  URL Detected",
+                fg_color=theme["card_hover"],
+                text_color=theme["primary"]
             )
 
             self.result_box.configure(
-                border_color="#2563EB"
+                border_color=theme["primary"]
             )
 
             self.result_label.bind(
@@ -342,13 +343,13 @@ class ScanResultCard(ctk.CTkFrame):
         else:
 
             self.status_chip.configure(
-                text=" Plain Text",
-                fg_color="#3A3A3A",
-                text_color="white"
+                text=f"{icons.icon('text')}  Plain Text",
+                fg_color=theme["card_hover"],
+                text_color=theme["text"]
             )
 
             self.result_box.configure(
-                border_color="#4B5563"
+                border_color=theme["border"]
             )
 
             self.result_label.unbind("<Button-1>")
@@ -365,7 +366,7 @@ class ScanResultCard(ctk.CTkFrame):
         self.result = ""
         theme = ThemeManager.get_theme()
         self.icon.configure(
-            text="📄",
+            text=icons.icon("text"),
             text_color=theme["text_secondary"]
         )
 
@@ -464,7 +465,7 @@ class ScanResultCard(ctk.CTkFrame):
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             border_color=theme["border"],
-            text_color=theme["text"]
+            text_color="#FFFFFF"
         )
 
         if not self.result:

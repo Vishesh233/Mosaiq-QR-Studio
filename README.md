@@ -35,8 +35,8 @@ A modern desktop application for generating and scanning QR codes with a clean i
 - Python
 - CustomTkinter
 - Pillow
-- OpenCV
-- Pyzbar
+- OpenCV (QR scanning via `cv2.QRCodeDetector`)
+- pywin32 (Windows clipboard)
 - QRCode
 
 ---
@@ -66,7 +66,7 @@ QR-Code-Studio-v2/
 ### Clone Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/QR-Code-Studio-v2.git
+git clone https://github.com/Vishesh233/QR-Code-Studio-v2.git
 ```
 
 ### Open Project
@@ -95,7 +95,7 @@ python main.py
 customtkinter
 Pillow
 opencv-python
-pyzbar
+pywin32
 qrcode
 ```
 
