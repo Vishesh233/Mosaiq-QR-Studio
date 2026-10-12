@@ -49,7 +49,7 @@ class ScanResultCard(ctk.CTkFrame):
             self.header,
             width=12,
             height=12,
-            fg_color="#22C55E",
+            fg_color=theme["success"],
             corner_radius=6
         )
 
@@ -187,7 +187,7 @@ class ScanResultCard(ctk.CTkFrame):
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             border_color=theme["border"],
-            text_color="#FFFFFF",
+            text_color=theme["on_primary"],
             state="disabled",
             command=self.on_copy,
             font=("Segoe UI Semibold", 14)
@@ -197,6 +197,7 @@ class ScanResultCard(ctk.CTkFrame):
             anchor="center",
             pady=(18, 16)
         )
+        self._style_copy_btn()
 
         self.divider2 = ctk.CTkFrame(
             self,
@@ -358,6 +359,25 @@ class ScanResultCard(ctk.CTkFrame):
         self.copy_btn.configure(
             state="normal"
         )
+        self._style_copy_btn()
+
+    # ==================================================
+
+    def _style_copy_btn(self):
+        """Primary when there is a result to copy, a quiet neutral button otherwise."""
+        theme = ThemeManager.get_theme()
+        if str(self.copy_btn.cget("state")) == "disabled":
+            self.copy_btn.configure(
+                fg_color=theme["card_hover"],
+                hover_color=theme["card_hover"],
+                text_color_disabled=theme["text_secondary"],
+            )
+        else:
+            self.copy_btn.configure(
+                fg_color=theme["primary"],
+                hover_color=theme["primary_hover"],
+                text_color=theme["on_primary"],
+            )
 
     # ==================================================
 
@@ -389,6 +409,7 @@ class ScanResultCard(ctk.CTkFrame):
         self.copy_btn.configure(
             state="disabled"
         )
+        self._style_copy_btn()
 
         self.result_label.unbind("<Button-1>")
         self.icon.unbind("<Button-1>")
@@ -461,12 +482,7 @@ class ScanResultCard(ctk.CTkFrame):
         for label in self.tip_labels:
             label.configure(text_color=theme["text_secondary"])
 
-        self.copy_btn.configure(
-            fg_color=theme["primary"],
-            hover_color=theme["primary_hover"],
-            border_color=theme["border"],
-            text_color="#FFFFFF"
-        )
+        self._style_copy_btn()
 
         if not self.result:
             self.status_chip.configure(

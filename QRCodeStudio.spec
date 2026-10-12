@@ -15,6 +15,8 @@
 #   * 'pyzbar' is excluded because the app never imports it (the scanner uses
 #     cv2.QRCodeDetector). Excluding it means no external libzbar DLL is needed.
 
+import os
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
@@ -22,6 +24,13 @@ block_cipher = None
 datas = []
 binaries = []
 hiddenimports = []
+
+# ---- Splash intro: ui/splash.py reads these two files at runtime from
+#      <bundle>/reference/. The .html / .mp4 in reference/ are dev-only. ----
+datas += [
+    (os.path.join(SPECPATH, "reference", "qr_matrix.json"), "reference"),
+    (os.path.join(SPECPATH, "reference", "Exo2-BlackItalic.ttf"), "reference"),
+]
 
 
 def _collect_all(pkg):

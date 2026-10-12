@@ -1,29 +1,43 @@
 import customtkinter as ctk
 
+from utils import settings_store
 from utils.theme_manager import ThemeManager
 from ui import icons
 
 
 class SettingsDialog(ctk.CTkToplevel):
+    """Appearance settings: a live theme gallery and the intro preference.
+
+    Clicking a theme tile previews it on the whole app immediately; Apply keeps
+    it (and remembers it for the next launch), Cancel or closing the window
+    restores the theme that was active when the dialog opened.
+    """
+
+    TILE_COLUMNS = 4
 
     def __init__(self, parent):
         super().__init__(parent)
 
         self.parent = parent
+        self._original_theme = ThemeManager.get_current_theme()
+        self._selected = self._original_theme
+        self._tiles = {}
 
         self.title("Settings")
-        self.geometry("520x560")
+        self.geometry("760x660")
         self.resizable(False, False)
 
         # Modal behaviour + clean focus return to the parent window.
         self.transient(parent)
         self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-        self.theme_var = ctk.StringVar(
-            value=ThemeManager.get_current_theme()
+        self.splash_var = ctk.BooleanVar(
+            value=bool(settings_store.get("splash_enabled", True))
         )
 
         self._build_ui()
+        self._refresh_selection()
 
     # ======================================================
 
@@ -43,205 +57,225 @@ class SettingsDialog(ctk.CTkToplevel):
         return getattr(self.winfo_toplevel(), "app", None)
 
     def _build_ui(self):
-
         theme = ThemeManager.get_theme()
 
-        # ---------------- Main Container ---------------- #
-
-        self.container = ctk.CTkFrame(
-            self,
-            fg_color=theme["background"],
-            corner_radius=0
-        )
+        self.container = ctk.CTkFrame(self, fg_color=theme["background"], corner_radius=0)
         self.container.pack(fill="both", expand=True)
 
         # ---------------- Title ---------------- #
 
         title_row = ctk.CTkFrame(self.container, fg_color="transparent")
-        title_row.pack(anchor="w", padx=30, pady=(25, 10))
+        title_row.pack(anchor="w", padx=30, pady=(24, 2))
 
         ctk.CTkLabel(
             title_row,
             text=icons.icon("settings"),
-            font=icons.icon_font(24),
+            font=icons.icon_font(22),
             text_color=theme["primary"],
         ).pack(side="left", padx=(0, 12))
 
-        self.title_label = ctk.CTkLabel(
+        ctk.CTkLabel(
             title_row,
             text="Settings",
             font=("Segoe UI Semibold", 22),
-            text_color=theme["text"]
-        )
-        self.title_label.pack(side="left")
+            text_color=theme["text"],
+        ).pack(side="left")
 
-        # ---------------- Appearance ---------------- #
-
-        self.appearance_label = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.container,
-            text="Appearance",
-            font=("Segoe UI Semibold", 15),
-            text_color=theme["text"]
-        )
-        self.appearance_label.pack(anchor="w", padx=30, pady=(15, 8))
-
-        self.theme_label = ctk.CTkLabel(
-            self.container,
-            text="Theme",
+            text="Personalise how QR Code Studio looks. Themes preview instantly.",
             font=("Segoe UI", 13),
-            text_color=theme["text_secondary"]
-        )
-        self.theme_label.pack(anchor="w", padx=30)
+            text_color=theme["text_secondary"],
+        ).pack(anchor="w", padx=30, pady=(0, 18))
 
-        self.theme_menu = ctk.CTkOptionMenu(
-            self.container,
-            values=ThemeManager.get_theme_names(),
-            variable=self.theme_var,
-            width=240,
-            height=38,
-            corner_radius=10,
-            fg_color=theme["card"],
-            button_color=theme["primary"],
-            button_hover_color=theme["primary_hover"],
-            dropdown_fg_color=theme["panel"],
-            dropdown_hover_color=theme["card_hover"],
-            dropdown_text_color=theme["text"],
-            text_color=theme["text"],
-            command=self.preview_theme
-        )
-        self.theme_menu.pack(anchor="w", padx=30, pady=(8, 25))
+        # ---------------- Theme gallery ---------------- #
 
-        # ---------------- Preview Card ---------------- #
+        self._section("THEME")
 
-        self.preview = ctk.CTkFrame(
-            self.container,
-            fg_color=theme["card"],
-            corner_radius=14,
-            border_width=1,
-            border_color=theme["border"]
-        )
-        self.preview.pack(fill="x", padx=30)
+        grid = ctk.CTkFrame(self.container, fg_color="transparent")
+        grid.pack(fill="x", padx=24)
+        for col in range(self.TILE_COLUMNS):
+            grid.grid_columnconfigure(col, weight=1, uniform="tiles")
 
-        self.preview_title = ctk.CTkLabel(
-            self.preview,
-            text="Preview",
-            font=("Segoe UI Semibold", 15),
-            text_color=theme["text"]
-        )
-        self.preview_title.pack(anchor="w", padx=20, pady=(18, 10))
+        for index, name in enumerate(ThemeManager.get_theme_names()):
+            tile = self._make_tile(grid, name)
+            tile.grid(row=index // self.TILE_COLUMNS, column=index % self.TILE_COLUMNS,
+                      padx=6, pady=6, sticky="nsew")
+            self._tiles[name] = tile
 
-        self.sample_entry = ctk.CTkEntry(
-            self.preview,
-            placeholder_text="Sample Entry",
-            height=38,
-            corner_radius=10,
-            fg_color=theme["entry"],
-            border_color=theme["entry_border"],
-            text_color=theme["text"],
-        )
-        self.sample_entry.pack(fill="x", padx=20)
+        # ---------------- Startup ---------------- #
 
-        self.sample_button = ctk.CTkButton(
-            self.preview,
-            text="Sample Button",
-            width=160,
-            height=38,
-            corner_radius=10,
-            fg_color=theme["primary"],
-            hover_color=theme["primary_hover"],
-            text_color="#FFFFFF",
+        self._section("STARTUP", pady=(22, 8))
+
+        startup = ctk.CTkFrame(
+            self.container, fg_color=theme["card"], corner_radius=12,
+            border_width=1, border_color=theme["border"],
         )
-        self.sample_button.pack(padx=20, pady=20)
+        startup.pack(fill="x", padx=30)
+
+        text_col = ctk.CTkFrame(startup, fg_color="transparent")
+        text_col.pack(side="left", padx=18, pady=14)
+        ctk.CTkLabel(
+            text_col, text="Intro animation",
+            font=("Segoe UI Semibold", 14), text_color=theme["text"],
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            text_col, text="Play the cinematic splash when the app starts.",
+            font=("Segoe UI", 12), text_color=theme["text_secondary"],
+        ).pack(anchor="w")
+
+        ctk.CTkSwitch(
+            startup, text="", variable=self.splash_var,
+            onvalue=True, offvalue=False, width=52,
+            progress_color=theme["primary"],
+            button_color=theme["text"],
+            button_hover_color=theme["text_secondary"],
+            fg_color=theme["border"],
+        ).pack(side="right", padx=18)
 
         # ---------------- Bottom Buttons ---------------- #
 
         button_frame = ctk.CTkFrame(self.container, fg_color="transparent")
-        button_frame.pack(side="bottom", fill="x", padx=30, pady=25)
+        button_frame.pack(side="bottom", fill="x", padx=30, pady=24)
 
-        self.cancel_btn = ctk.CTkButton(
+        ctk.CTkButton(
             button_frame,
             text="Cancel",
-            width=120,
-            height=40,
-            corner_radius=10,
+            width=120, height=40, corner_radius=10,
             fg_color="transparent",
             border_width=1,
             border_color=theme["border"],
             hover_color=theme["card_hover"],
             text_color=theme["text"],
-            command=self.destroy
-        )
-        self.cancel_btn.pack(side="right")
+            command=self.cancel,
+        ).pack(side="right")
 
-        self.apply_btn = ctk.CTkButton(
+        ctk.CTkButton(
             button_frame,
             text="Apply",
-            width=120,
-            height=40,
-            corner_radius=10,
+            width=120, height=40, corner_radius=10,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
-            text_color="#FFFFFF",
-            command=self.apply_theme
+            text_color=theme["on_primary"],
+            font=("Segoe UI Semibold", 13),
+            command=self.apply,
+        ).pack(side="right", padx=(0, 12))
+
+    def _section(self, text, pady=(0, 8)):
+        ctk.CTkLabel(
+            self.container, text=text,
+            font=("Segoe UI Semibold", 11),
+            text_color=ThemeManager.get_theme()["text_secondary"],
+        ).pack(anchor="w", padx=30, pady=pady)
+
+    # ------------------------------------------------------
+
+    def _make_tile(self, parent, name):
+        """A clickable card with a miniature of the theme's own colours."""
+        theme = ThemeManager.get_theme()
+        t = ThemeManager.THEMES[name]
+
+        tile = ctk.CTkFrame(
+            parent, fg_color=theme["card"], corner_radius=14,
+            border_width=2, border_color=theme["border"],
         )
-        self.apply_btn.pack(side="right", padx=(0, 12))
+
+        # Miniature app: sidebar, a card, a primary button and accent dots.
+        # It shows another theme's colours, so the live re-theme skips it.
+        mini = ctk.CTkFrame(tile, height=86, fg_color=t["background"], corner_radius=10)
+        mini._theme_skip = True
+        mini.pack(fill="x", padx=10, pady=(10, 8))
+        mini.pack_propagate(False)
+
+        side = ctk.CTkFrame(mini, width=26, fg_color=t["navbar"], corner_radius=8)
+        side.pack(side="left", fill="y", padx=(6, 0), pady=6)
+        for color in (t["primary"], t["text_secondary"], t["text_secondary"]):
+            ctk.CTkFrame(side, width=12, height=4, corner_radius=2, fg_color=color).pack(pady=(6, 0))
+
+        card = ctk.CTkFrame(mini, fg_color=t["card"], corner_radius=8,
+                            border_width=1, border_color=t["border"])
+        card.pack(side="left", fill="both", expand=True, padx=6, pady=6)
+        ctk.CTkFrame(card, height=5, width=54, corner_radius=2,
+                     fg_color=t["text"]).pack(anchor="w", padx=8, pady=(9, 0))
+        ctk.CTkFrame(card, height=4, width=38, corner_radius=2,
+                     fg_color=t["text_secondary"]).pack(anchor="w", padx=8, pady=(5, 0))
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=(9, 0))
+        ctk.CTkFrame(row, height=14, width=40, corner_radius=7,
+                     fg_color=t["primary"]).pack(side="left")
+        ctk.CTkFrame(row, height=8, width=8, corner_radius=4,
+                     fg_color=t["accent"]).pack(side="left", padx=(6, 0))
+
+        label_row = ctk.CTkFrame(tile, fg_color="transparent")
+        label_row.pack(fill="x", padx=12, pady=(0, 10))
+        ctk.CTkLabel(
+            label_row, text=name, font=("Segoe UI Semibold", 13),
+            text_color=theme["text"],
+        ).pack(side="left")
+        ctk.CTkLabel(
+            label_row, text=t["mode"], font=("Segoe UI", 11),
+            text_color=theme["text_secondary"],
+        ).pack(side="right")
+
+        self._bind_click(tile, lambda _e, n=name: self.preview_theme(n))
+        return tile
+
+    def _bind_click(self, widget, callback):
+        widget.bind("<Button-1>", callback, add="+")
+        try:
+            widget.configure(cursor="hand2")
+        except Exception:
+            pass
+        for child in widget.winfo_children():
+            self._bind_click(child, callback)
+
+    def _refresh_selection(self):
+        theme = ThemeManager.get_theme()
+        for name, tile in self._tiles.items():
+            tile.configure(
+                border_color=theme["primary"] if name == self._selected else theme["border"]
+            )
 
     # ======================================================
 
-    def preview_theme(self, theme_name):
-
-        theme = ThemeManager.THEMES[theme_name]
-
-        self.container.configure(fg_color=theme["background"])
-        self.title_label.configure(text_color=theme["text"])
-        self.appearance_label.configure(text_color=theme["text"])
-        self.theme_label.configure(text_color=theme["text_secondary"])
-
-        self.preview.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"]
-        )
-        self.preview_title.configure(text_color=theme["text"])
-
-        self.theme_menu.configure(
-            fg_color=theme["card"],
-            button_color=theme["primary"],
-            button_hover_color=theme["primary_hover"],
-            dropdown_fg_color=theme["panel"],
-            dropdown_hover_color=theme["card_hover"],
-            text_color=theme["text"],
-        )
-
-        self.cancel_btn.configure(
-            border_color=theme["border"],
-            hover_color=theme["card_hover"],
-            text_color=theme["text"],
-        )
-
-        self.sample_entry.configure(
-            fg_color=theme["entry"],
-            border_color=theme["entry_border"],
-            text_color=theme["text"]
-        )
-
-        self.sample_button.configure(
-            fg_color=theme["primary"],
-            hover_color=theme["primary_hover"]
-        )
-
-        self.apply_btn.configure(
-            fg_color=theme["primary"],
-            hover_color=theme["primary_hover"]
-        )
-
-    # ======================================================
-
-    def apply_theme(self):
-
-        ThemeManager.set_theme(self.theme_var.get())
-
+    def _apply_live(self, name):
+        ThemeManager.set_theme(name, persist=False)
         app = self._find_app()
         if app:
             app.refresh_theme()
+        else:
+            ThemeManager.retheme_tree(self)
 
+    def preview_theme(self, theme_name):
+        """Show ``theme_name`` on the whole app right away (not saved yet)."""
+        if theme_name == self._selected:
+            return
+        self._selected = theme_name
+        self._apply_live(theme_name)
+        self._refresh_selection()
+        # Switching between Dark and Light makes CustomTkinter hide and re-show
+        # windows to recolour their title bars, which can drop this dialog
+        # behind the main window; bring it back once that has settled.
+        self._restore_front()
+        self.after(150, self._restore_front)
+
+    def _restore_front(self):
+        try:
+            if self.state() == "withdrawn":
+                self.deiconify()
+            self.lift()
+            self.focus_force()
+            self.grab_set()
+        except Exception:
+            pass
+
+    def apply(self):
+        ThemeManager.set_theme(self._selected)
+        settings_store.set("splash_enabled", bool(self.splash_var.get()))
+        self.destroy()
+
+    def cancel(self):
+        if ThemeManager.get_current_theme() != self._original_theme:
+            self._apply_live(self._original_theme)
+        ThemeManager.set_theme(self._original_theme)
         self.destroy()

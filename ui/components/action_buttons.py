@@ -36,7 +36,7 @@ class ActionButtons(ctk.CTkFrame):
             corner_radius=12,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
-            text_color="#FFFFFF",
+            text_color=theme["on_primary"],
             font=("Segoe UI Semibold", 13),
             command=self.on_generate
         )
@@ -155,7 +155,8 @@ class ActionButtons(ctk.CTkFrame):
 
         self.generate_btn.configure(
             fg_color=theme["primary"],
-            hover_color=theme["primary_hover"]
+            hover_color=theme["primary_hover"],
+            text_color=theme["on_primary"]
         )
 
         self.copy_btn.configure(

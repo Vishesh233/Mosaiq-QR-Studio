@@ -1,6 +1,5 @@
 import customtkinter as ctk
 
-from ui.widgets import ModernEntry
 from ui.components.hero_section import HeroSection
 from ui.components.content_card import ContentCard
 from ui.components.preview_card import PreviewCard
@@ -87,58 +86,6 @@ class GeneratePage(ctk.CTkFrame):
             fill="x",
             pady=(0, 16)
         )
-        content_frame = ctk.CTkFrame(
-            self.content_card,
-            fg_color="transparent"
-        )
-
-        content_frame.pack(
-            fill="both",
-            expand=True,
-            padx=18,
-            pady=18
-        )
-
-        title = ctk.CTkLabel(
-            content_frame,
-            text="🔗  Content",
-            font=("Segoe UI", 18, "bold")
-        )
-
-        title.pack(anchor="w")
-
-        label1 = ctk.CTkLabel(
-            content_frame,
-            text="WEBSITE URL OR TEXT",
-            font=("Segoe UI", 11),
-            text_color="#9CA3AF"
-        )
-
-        label1.pack(anchor="w", pady=(16,5))
-
-        self.url_entry = ModernEntry(
-            content_frame,
-            placeholder="https://example.com"
-        )
-
-        self.url_entry.pack(fill="x")
-
-        label2 = ctk.CTkLabel(
-            content_frame,
-            text="OUTPUT FILE NAME",
-            font=("Segoe UI", 11),
-            text_color="#9CA3AF"
-        )
-
-        label2.pack(anchor="w", pady=(14,5))
-
-        self.file_entry = ModernEntry(
-            content_frame,
-            placeholder="my_qr_code"
-            )
-
-        self.file_entry.pack(fill="x")
-
         self.logo_card = LogoCard(self.left)
 
         self.logo_card.pack(

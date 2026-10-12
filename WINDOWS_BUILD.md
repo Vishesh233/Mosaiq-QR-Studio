@@ -36,11 +36,15 @@ and the scanner was verified to work without it. The spec therefore **excludes `
 so **no external ZBar DLL (`libzbar-64.dll`) is required** for the packaged app.
 (If you ever add a `pyzbar`-based scanner, you must then bundle `libzbar-64.dll` — see §6.)
 
-### Important: no repo data files are needed at runtime
+### Important: only two repo data files are needed at runtime
 
-The `assets/` folder only contains README screenshots. The UI uses emoji text and
-`CTkImage` on in-memory images, so nothing from `assets/` is loaded by the app.
-Only **CustomTkinter's own bundled assets** need to ship (handled by `collect_all("customtkinter")`).
+The splash intro (`ui/splash.py`) reads `reference/qr_matrix.json` and
+`reference/Exo2-BlackItalic.ttf`; the spec bundles both under `reference/`.
+The rest of `reference/` (the `.html` spec and `.mp4`) is dev-only and is not shipped.
+
+The `assets/` folder only holds README screenshots, logo PNGs and thumbnails. The brand
+logo is rendered in code (`ui/brand_logo.py`), so nothing from `assets/` is loaded by the app.
+**CustomTkinter's own bundled assets** must also ship (handled by `collect_all("customtkinter")`).
 
 ---
 
@@ -107,7 +111,8 @@ Manual test checklist:
 - [ ] **Scan:** switch to Scan → upload a QR image (e.g. a PNG you just saved) →
       decoded URL/text is shown.
 - [ ] **Scan link:** clicking a decoded `http(s)` URL opens the browser.
-- [ ] **Themes:** Settings ⚙ → switch theme (Midnight/Carbon/Deep Navy/AMOLED) → Apply.
+- [ ] **Intro:** the full-screen splash plays, then the maximized main window appears.
+- [ ] **Themes:** Settings ⚙ → pick a theme from the gallery (Midnight … Daylight) → Apply.
 
 A quick headless sanity check of the generate→scan→clipboard logic (no GUI) also exists:
 

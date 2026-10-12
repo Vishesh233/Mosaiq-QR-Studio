@@ -73,8 +73,8 @@ def main():
     bg_before = app.root.cget("fg_color")
 
     dlg2 = SettingsDialog(app.header)
-    dlg2.theme_var.set(other)
-    dlg2.apply_theme()               # closes dialog + refreshes app
+    dlg2.preview_theme(other)        # live preview re-themes the app
+    dlg2.apply()                     # saves the choice + closes the dialog
     root.update_idletasks()
     bg_after = app.root.cget("fg_color")
     if bg_before == bg_after:

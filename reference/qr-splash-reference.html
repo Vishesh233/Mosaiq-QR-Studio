@@ -1,0 +1,608 @@
+<title>QR Code Studio V2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@1,800;1,900&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed canvas behind a centred stack (QR slot, wordmark, V2) with a slim control bar below. One dark look by design. */
+:root {
+  --bg: #060a0e;
+  --a0: #4fe3f6;
+  --a: #22d3ee;
+  --b: #6ee7b7;
+  --ice: #b8f3ff;
+  --deep: #0d2d33;
+  --stroke: #1b7f8f;
+  --glow: rgba(16, 72, 84, .5);
+  --fg: #d7f4f7;
+  --muted: #86a9af;
+  --line: #17363c;
+  --panel: rgba(8, 16, 20, .74);
+  --font-display: 'Exo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html { background: var(--bg); }
+body {
+  margin: 0;
+  padding-inline: 16px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+#bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+
+.stage {
+  position: relative;
+  z-index: 1;
+  min-height: 80vh;
+  min-height: calc(100svh - 150px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-block: 24px 8px;
+}
+.qr-slot { width: min(52vw, 34vh, 300px); aspect-ratio: 1; }
+.word {
+  margin: clamp(14px, 3vh, 28px) 0 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: clamp(26px, 7.2vw, 60px);
+  line-height: 1.05;
+  letter-spacing: .01em;
+  padding: 0 .12em .22em;
+  margin-bottom: -.22em;
+  background: linear-gradient(90deg, var(--a0) 0%, var(--a) 40%, var(--b) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 16px rgba(34, 211, 238, .22));
+  text-wrap: balance;
+}
+.ver {
+  margin-top: 2px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: clamp(72px, 17vw, 140px);
+  line-height: .95;
+  color: var(--ice);
+  text-shadow: 3px 3px 0 var(--stroke), 0 0 44px var(--glow);
+}
+
+.bar {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  margin: 0 auto;
+  padding-block: 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.row { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: center; }
+.tag { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+button, summary { font: inherit; color: inherit; }
+.chip, .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] { border-color: var(--a); color: var(--ice); }
+.chip:hover, .btn:hover { border-color: var(--a); }
+.sw { width: 30px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, var(--c1), var(--c2)); }
+.btn.solid { background: var(--a); color: #04161a; border-color: var(--a); font-weight: 500; }
+:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+
+.timeline { position: relative; display: flex; height: 26px; border: 1px solid var(--line); background: var(--panel); border-radius: 4px; overflow: hidden; }
+.timeline span { display: block; padding: 5px 6px; font-size: 10px; letter-spacing: .04em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--line); min-width: 0; }
+.timeline span:last-of-type { border-right: 0; }
+.timeline .on { color: var(--ice); background: rgba(34, 211, 238, .08); }
+#head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ice); box-shadow: 0 0 10px var(--a); left: 0; }
+
+details { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; }
+summary { padding: 12px 14px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.prompt-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.6; max-height: 320px; overflow: auto; }
+.btn-line { align-self: flex-start; }
+
+@media (prefers-reduced-motion: reduce) { .btn.replay, .timeline { display: none; } }
+</style>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<main class="stage" id="stage">
+  <div class="qr-slot" id="slot" role="img" aria-label="Animated QR code that assembles, then disintegrates into particles"></div>
+  <h1 class="word" id="word">QR CODE STUDIO</h1>
+  <div class="ver" id="ver">V2</div>
+</main>
+
+<section class="bar">
+  <div class="row" role="group" aria-label="Colour palette">
+    <span class="tag">Palette</span>
+    <button class="chip" type="button" data-pal="aqua" style="--c1:#22d3ee;--c2:#6ee7b7" aria-pressed="true"><i class="sw"></i>Aqua Mint</button>
+    <button class="chip" type="button" data-pal="violet" style="--c1:#a78bfa;--c2:#f472b6" aria-pressed="false"><i class="sw"></i>Ultraviolet</button>
+    <button class="chip" type="button" data-pal="ember" style="--c1:#fb923c;--c2:#f43f5e" aria-pressed="false"><i class="sw"></i>Ember</button>
+    <button class="btn solid replay" id="replay" type="button">Replay</button>
+  </div>
+
+  <div class="timeline" id="timeline" aria-label="Animation timeline, 11 second loop">
+    <span style="width:8.2%">Hold</span>
+    <span style="width:15.5%">Assemble</span>
+    <span style="width:18.2%">Scan</span>
+    <span style="width:27.3%">Disintegrate</span>
+    <span style="width:30.8%">Return</span>
+    <i id="head"></i>
+  </div>
+
+  <details id="promptBox">
+    <summary><span>Prompt for Cline</span><span class="tag">exact replica spec</span></summary>
+    <div class="prompt-body">
+      <pre id="promptText">TASK: Replace the splash screen of QR Code Studio V2 with an EXACT replica of the reference animation I am giving you. Do not redesign, restyle, "improve" or simplify anything. Same colours, same font, same timings, same maths, same random values.
+
+FILES I AM GIVING YOU (put them in the project under reference/ and read all of them before writing code):
+1. qr-splash-reference.mp4 - ground-truth motion, 1280x800, 30 fps, one 11 s loop.
+2. qr-splash-keyframes.png - 9 labelled frames from that video (t = 0.0, 1.6, 2.4, 3.3, 4.1, 5.3, 6.2, 7.2, 8.5 s).
+3. qr-splash-reference.html - ground-truth source code. Every constant below comes from it. If this prompt and the HTML ever disagree, the HTML wins, then the video.
+4. qr_matrix.json - the exact 33x33 QR module grid (558 dark modules). Use it as is. Do not generate a new QR.
+5. Exo2-BlackItalic.ttf - the only font (Exo 2, weight 900, italic, OFL licence). Bundle it and load it privately. Never rely on a system font.
+
+RULES
+- Match the video frame by frame. No extra elements, no new colours, no text, no loading bar, no buttons.
+- Every position and alpha is a pure function of (t, ts). No integrated per-frame state, so any frame can be reproduced exactly.
+- If this stack cannot do something below (blur, additive blending), tell me first, then approximate as closely as possible.
+- Delete the splash code from the earlier attempt. Keep only the hook that shows the splash on app launch and hands over to the main window.
+
+STACK
+Use the stack the project already uses.
+- If it is Python + CustomTkinter: open a borderless, centred, non-resizable window of SPLASH_W x SPLASH_H = 1280 x 800 (constants). Render each frame off-screen with numpy + Pillow, push it into one tk Canvas image with ImageTk.PhotoImage, schedule with after() and take t from time.perf_counter() (never from a frame counter). Aim for 60 fps, minimum 30 fps. Pre-render everything static once at start (glyph masks, gradient fill, blurred glows, vignette).
+- If the target is a web page: reuse qr-splash-reference.html unchanged.
+All geometry is derived from W,H (window size) with the formulas below, so any size works.
+Playback: play t = 0 to 8800 ms once, then hold t = 8800 (the background keeps animating with ts) until the main window is ready, then close the splash immediately. Add a dev flag --splash-loop that uses t = ts mod 11000 so it can be compared with the video.
+
+=====================================================
+1. CONSTANTS AND HELPERS
+=====================================================
+N = 33 (qr_matrix.json "rows"[r][c], r from top, c from left; '1' = dark). Dark modules = 558.
+Timeline (ms): T = 11000, ASM0 = 900, ASM_SPAN = 1100, ASM_DUR = 700, FO0 = 900, FO1 = 2600, SCAN0 = 2800, SCAN1 = 4000, DIS0 = 4600, DIS_SPAN = 1500, FI0 = 7600, FI1 = 8800, DIM = 0.3
+Colours (RGB): BG (6,10,14)  A0 (79,227,246)  A (34,211,238)  B (110,231,183)  ICE (184,243,255)  GLOW (16,72,84)  DEEP (13,45,52)  STROKE (27,127,143)
+
+    clamp(x, a=0, b=1) = min(b, max(a, x))
+    easeOut(u) = 1 - (1-u)**3
+    smooth(u)  = u*u*(3-2*u)
+    mix(c1, c2, m) = c1 + (c2-c1)*m, per channel; truncate to int when used as a colour
+    rowColor[r] = mix(A, B, r/(N-1)) for r in 0..N-1
+
+Random numbers: mulberry32, must be bit-exact with the reference:
+
+    def mulberry32(seed):
+        s = seed &amp; 0xFFFFFFFF
+        def rnd():
+            nonlocal s
+            s = (s + 0x6D2B79F5) &amp; 0xFFFFFFFF
+            t = ((s ^ (s &gt;&gt; 15)) * (1 | s)) &amp; 0xFFFFFFFF
+            t = ((t + (((t ^ (t &gt;&gt; 7)) * (61 | t)) &amp; 0xFFFFFFFF)) &amp; 0xFFFFFFFF) ^ t
+            return ((t ^ (t &gt;&gt; 14)) &amp; 0xFFFFFFFF) / 4294967296
+        return rnd
+
+Self-test (must print exactly this): mulberry32(7) first 5 values 0.0117047532 0.0619582576 0.9769076328 0.6990287057 0.5214452685. mulberry32(3) first 3 values 0.7202267838 0.0386621605 0.4561921926.
+
+=====================================================
+2. LAYOUT (stage = the whole window, everything centred on (W/2, H/2))
+=====================================================
+    S       = min(0.52*W, 0.34*H, 300)        # QR side
+    gap1    = clamp(0.03*H, 14, 28)           # QR bottom to title line box top
+    titleFS = clamp(0.072*W, 26, 60)          # "QR CODE STUDIO"
+    verFS   = clamp(0.17*W, 72, 140)          # "V2"
+Vertical stack, centred: QR (S) + gap1 + title line box (1.05*titleFS) + 2 px + V2 line box (0.95*verFS).
+total = S + gap1 + 1.05*titleFS + 2 + 0.95*verFS ; top = (H - total)/2 ; QR x = (W - S)/2, QR y = top.
+Title and V2 are centred horizontally on W/2.
+
+Check your numbers at 1280x800 against these (measured from the reference):
+- QR slot: x 504, y 153, side 272.
+- Title: font 60 px, line box y 449 to 512 (63 tall), glyph baseline y = 504, text x = 395.5, text width 489.1 (includes letter-spacing 0.01*FS = 0.6 px per character), gradient box x 388.3 to 891.7 (text width + 0.24*FS).
+- V2: font 140 px, line box y 514 to 647 (133 tall), glyph baseline y = 636, text x = 552.1, width 175.7.
+At 1920x1080: QR x 810, y 277, side 300, title line box top 605, V2 line box top 670.
+Font metrics (Exo 2 Black Italic): ascent 0.999 em, descent 0.201 em, content area 1.2 em.
+
+=====================================================
+3. TITLE AND V2 (drawn LAST, above everything else, so the QR and particles pass underneath)
+=====================================================
+    alpha_title(t):
+        t &lt; FO0 : 1
+        t &lt; FO1 : 1 + (DIM-1)*smooth((t-FO0)/(FO1-FO0))
+        t &lt; FI0 : DIM
+        t &lt; FI1 : DIM + (1-DIM)*smooth((t-FI0)/(FI1-FI0))
+        else    : 1
+
+"QR CODE STUDIO": Exo2-BlackItalic, uppercase, size titleFS, letter-spacing 0.01*titleFS.
+- Fill: horizontal linear gradient across the gradient box (text width + 0.24*titleFS, centred): 0% A0, 40% A, 100% B. The gradient fills only the glyphs.
+- Glow behind it: the glyph mask blurred with a Gaussian of sigma 8 px, colour (34,211,238) at alpha 0.22.
+- The whole title layer (glow + fill) is multiplied by alpha_title(t).
+
+"V2": Exo2-BlackItalic, size verFS, fill ICE.
+- Draw order bottom to top: (1) glow = glyph mask blurred, sigma 22 px, colour GLOW at alpha 0.55; (2) hard shadow = the same glyphs offset by +3 px, +3 px, colour STROKE, opaque; (3) the ICE fill.
+- The whole V2 layer is multiplied by alpha_title(t).
+Blur sigmas and the 3 px offset are for the 60 px / 140 px reference sizes; scale them proportionally with the font size.
+
+=====================================================
+4. BACKGROUND (every frame)
+=====================================================
+ts = milliseconds since the splash started (continuous, never looped). t = ts in one-shot mode, t = ts mod 11000 in loop mode (and t is held at 8800 after the one-shot ends).
+
+A) Fill BG.
+
+B) Glow rings:
+    pres = clamp( clamp((t-1500)/1200) - clamp((t-DIS0-300)/1500) )
+    Rr   = clamp(0.48*W, 220, 430) * (1 + 0.02*sin(ts*0.0008))
+    ga   = 0.04*(1 + 0.7*pres)
+    for i in 0..8:
+        rx = Rr*(1 - i/9) ; ry = rx*0.64
+        fill an ellipse centred (W/2, H/2) with radii (rx, ry), colour GLOW, alpha ga, normal blending (9 stacked ellipses make 9 visible bands, brightest in the middle).
+
+C) Pixel pairs:
+    rr = mulberry32(3) ; k = clamp(W/1200, 0.6, 1.2) ; count = round(clamp(W*H/52000, 10, 26))   # 20 at 1280x800
+    for i in range(count), consume rr() in exactly this order:
+        x = rr()*W ; y0 = rr()*(H+80) ; s = (10 + rr()*22)*k ; sp = 4 + rr()*10 ; al = 0.4 + rr()*0.55
+    each frame: y = ((y0 - sp*ts/1000) mod (H+80) + (H+80)) mod (H+80) - 40
+    draw square (x, y, s, s) and square (x + 0.85*s, y + 0.85*s, 0.8*s, 0.8*s), colour DEEP, alpha al.
+
+D) Dust. Continue the SAME rr right after the pairs (do not reseed):
+    for i in range(70): x = rr()*W ; y = rr()*H ; r = 0.6 + rr()*1.1 ; ph = rr()*2*pi ; sp = 0.4 + rr()*1.2
+    each frame: alpha = 0.12 + 0.3*(0.5 + 0.5*sin(ts*0.001*sp + ph)) ; draw an r x r square at (x, y), colour A.
+
+E) Vignette: radial gradient centred (W/2, H/2), colour BG, alpha 0 up to radius min(W,H)*0.35, rising linearly to 0.7 at radius hypot(W,H)*0.6, constant 0.7 beyond. Normal blending.
+
+=====================================================
+5. QR CODE (only when t &gt;= ASM0)
+=====================================================
+    ox, oy = QR slot top-left ; cell = S/N ; size = 0.84*cell ; inset = 0.08*cell ; sc = S/300
+    module (r,c) rests at (ox + c*cell + inset, oy + r*cell + inset), size x size
+
+Per-module parameters, generated ONCE with R = mulberry32(7). Iterate r = 0..N-1, then c = 0..N-1, and only for dark modules. Consume R() in exactly this order:
+
+    ang = R()*2*pi ; rad = 0.5 + R()*0.9
+    dist = hypot(c - N/2, r - N/2) / (N*0.7)
+    fa = clamp(0.65*R() + 0.35*dist)
+    fb = clamp((c/N)*0.72 + R()*0.28)
+    for s in 0..3:                              # qx = s &amp; 1, qy = s &gt;&gt; 1
+        dly = R()*140 ; life = 1100 + R()*1100 ; vx = 80 + R()*240
+        vy  = -(20 + R()*180) + (R() - 0.5)*80  # the 180 term is drawn first, then the 0.5 term
+        ta = R()*2*pi ; tf = 2 + R()*3 ; tm = 6 + R()*16
+    sx = cos(ang)*rad ; sy = sin(ang)*rad ; asmT = ASM0 + fa*ASM_SPAN ; brkT = DIS0 + fb*DIS_SPAN
+
+PASS 1 - intact modules (normal blending). For every module with asmT &lt;= t &lt; brkT:
+
+    u = clamp((t - asmT)/ASM_DUR) ; e = easeOut(u)
+    x = ox + c*cell + inset + sx*S*(1-e) ; y = oy + r*cell + inset + sy*S*(1-e)
+    sz = size*(0.4 + 0.6*e) ; off = (size - sz)/2
+    scan_on = SCAN0 &lt;= t &lt;= SCAN1 ; ly = oy + clamp((t-SCAN0)/(SCAN1-SCAN0))*S
+    hot = scan_on and abs(oy + (r+0.5)*cell - ly) &lt; 1.4*cell
+    colour = ICE if hot else rowColor[r] ; alpha = min(1, 1.7*e)
+    draw square (x+off, y+off, sz, sz)
+
+PASS 2 - scan bar, additive blending, only while scan_on: a vertical gradient from ly-14 to ly+14, colour ICE, alpha 0 at the top, 0.5 in the middle, 0 at the bottom. Rectangle from x = ox-10 to ox+S+10, y = ly-14 to ly+14.
+
+PASS 3 - particles, ADDITIVE blending (out = min(255, dst + colour*alpha)), only when t &gt;= DIS0. For every module with t &gt;= brkT:
+
+    bx = ox + c*cell + inset ; by = oy + r*cell + inset ; ss = size/2
+    for each of its 4 sub-particles:
+        x = bx + qx*ss ; y = by + qy*ss
+        tau = (t - brkT - dly)/1000
+        if tau &lt;= 0 : draw an ss x ss square at (x, y), colour rowColor[r], alpha 1 ; continue
+        if tau*1000 &gt;= life : skip
+        ul = tau*1000/life
+        px = x + vx*sc*tau*(1 + 0.4*tau) + sin(tau*tf + ta)*tm*sc*tau
+        py = y + vy*sc*tau - 30*sc*tau*tau + cos(tau*tf + ta)*tm*0.6*sc*tau
+        alpha = (1 - ul)**1.4 ; colour = ICE if ul &lt; 0.12 else rowColor[r] ; ps = ss*(1 - 0.7*ul)
+        draw a ps x ps square at (px, py)
+
+Final z-order: background (4A to 4E), then PASS 1, PASS 2, PASS 3, then title, then V2.
+Sub-pixel positions: if the renderer cannot draw fractional coordinates, round to the nearest pixel (anti-aliased drawing is preferred if available).
+
+=====================================================
+6. WHAT EACH KEYFRAME MUST LOOK LIKE (acceptance test)
+=====================================================
+ 1  t=0.0 s   Title and V2 fully visible and bright, no QR.
+ 2  t=1.6 s   Title and V2 partly faded (about 74% opacity). Scattered cyan/mint squares flying in toward the QR slot.
+ 3  t=2.4 s   QR fully assembled, cyan at the top fading to mint at the bottom. Title and V2 at 30%.
+ 4  t=3.3 s   QR held. A bright white-cyan scan bar crosses it, modules near the bar flash ICE.
+ 5  t=4.1 s   Scan bar near the bottom edge. QR intact.
+ 6  t=5.3 s   Left part of the QR has turned into fine particles. Right part still intact.
+ 7  t=6.2 s   Most of the QR is a cloud of tiny particles drifting up and to the right, shrinking and fading.
+ 8  t=7.2 s   Only a few faint particles remain at the upper right. Title and V2 still 30%.
+ 9  t=8.5 s   Title and V2 back to full brightness. No QR, no particles.
+
+=====================================================
+7. VERIFY BEFORE YOU FINISH
+=====================================================
+1. Write render_frame(t_ms, ts_ms=None) that returns the image for any t (pure function). Write _splash_validation.py that renders t = 0, 1.6, 2.4, 3.3, 4.1, 5.3, 6.2, 7.2, 8.5 s at 1280x800 into splash_check/ and builds a 3x3 contact sheet like qr-splash-keyframes.png. Look at your sheet next to the reference sheet and fix every visible difference.
+2. Numeric checks: 558 modules generated; at t = 2.8 s all 558 are fully formed (e = 1); at t = 4.4 s none has broken; at t &gt;= 8.5 s no particle is drawn (the last one ends by 8440 ms); alpha_title is 1 at t=0, 0.3 at t=2.6 s and t=7.6 s, 1 at t=8.8 s; the mulberry32 self-test passes; the layout numbers in section 2 match at 1280x800.
+3. Performance: report the average and worst frame time over one full loop. It must hold at least 30 fps.
+4. Compare one frame from your loop mode with the matching video frame (same t) and tell me what, if anything, still differs.
+
+DELIVER: a short list of files changed or created, the frame-time numbers, and the 3x3 contact sheet. Do not add anything that is not described here.</pre>
+      <button class="btn btn-line" id="copyPrompt" type="button">Copy prompt</button>
+    </div>
+  </details>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(function () {
+  var TAU = Math.PI * 2;
+  var PAL = {
+    aqua:   { bg: [6, 10, 14],  a0: [79, 227, 246],  a: [34, 211, 238],  b: [110, 231, 183], ice: [184, 243, 255], glow: [16, 72, 84],  deep: [13, 45, 52], stroke: [27, 127, 143] },
+    violet: { bg: [8, 6, 15],   a0: [216, 196, 255], a: [167, 139, 250], b: [244, 114, 182], ice: [240, 226, 255], glow: [62, 32, 104], deep: [34, 20, 62], stroke: [96, 56, 168] },
+    ember:  { bg: [13, 8, 6],   a0: [253, 224, 71],  a: [251, 146, 60],  b: [244, 63, 94],   ice: [255, 236, 210], glow: [104, 46, 22], deep: [54, 28, 18], stroke: [160, 74, 32] }
+  };
+  var cur = PAL.aqua;
+  var rowCols = [], iceStr = '';
+
+  var T = 11000, ASM0 = 900, ASM_SPAN = 1100, ASM_DUR = 700;
+  var FO0 = 900, FO1 = 2600, SCAN0 = 2800, SCAN1 = 4000, DIS0 = 4600, DIS_SPAN = 1500, FI0 = 7600, FI1 = 8800, DIM = 0.3;
+  var STATIC_T = 3400;
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function clamp(x, a, b) { return Math.min(b === undefined ? 1 : b, Math.max(a === undefined ? 0 : a, x)); }
+  function easeOut(u) { return 1 - Math.pow(1 - u, 3); }
+  function smooth(u) { return u * u * (3 - 2 * u); }
+  function mix(c1, c2, t) { return [c1[0] + (c2[0] - c1[0]) * t, c1[1] + (c2[1] - c1[1]) * t, c1[2] + (c2[2] - c1[2]) * t]; }
+  function rgb(c) { return 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')'; }
+  function rgba(c, al) { return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + al + ')'; }
+  function rng(seed) {
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- QR matrix ---------- */
+  function fallbackMatrix() {
+    var n = 29, r = rng(11), m = [], i, j;
+    for (i = 0; i < n; i++) { m.push([]); for (j = 0; j < n; j++) m[i].push(r() > 0.52); }
+    function finder(x, y) {
+      for (var a = 0; a < 7; a++) for (var b = 0; b < 7; b++) {
+        var edge = a === 0 || b === 0 || a === 6 || b === 6, core = a >= 2 && a <= 4 && b >= 2 && b <= 4;
+        m[y + a][x + b] = edge || core;
+      }
+      for (var k = -1; k < 8; k++) {
+        [[x - 1, y + k], [x + 7, y + k], [x + k, y - 1], [x + k, y + 7]].forEach(function (p) {
+          if (p[0] >= 0 && p[1] >= 0 && p[0] < n && p[1] < n) m[p[1]][p[0]] = false;
+        });
+      }
+    }
+    finder(0, 0); finder(n - 7, 0); finder(0, n - 7);
+    return { n: n, m: m };
+  }
+  function buildMatrix() {
+    try {
+      var q = qrcode(0, 'M');
+      q.addData('QR CODE STUDIO V2 - CREATE, STYLE AND SCAN ANYTHING');
+      q.make();
+      var n = q.getModuleCount(), m = [];
+      for (var r = 0; r < n; r++) { m.push([]); for (var c = 0; c < n; c++) m[r].push(q.isDark(r, c)); }
+      return { n: n, m: m };
+    } catch (e) { return fallbackMatrix(); }
+  }
+
+  var QR = buildMatrix(), N = QR.n, R = rng(7), mods = [];
+  for (var r0 = 0; r0 < N; r0++) for (var c0 = 0; c0 < N; c0++) {
+    if (!QR.m[r0][c0]) continue;
+    var ang = R() * TAU, rad = 0.5 + R() * 0.9;
+    var dist = Math.hypot(c0 - N / 2, r0 - N / 2) / (N * 0.7);
+    var fa = clamp(0.65 * R() + 0.35 * dist);
+    var fb = clamp((c0 / N) * 0.72 + R() * 0.28);
+    var subs = [];
+    for (var s = 0; s < 4; s++) {
+      subs.push({
+        qx: s & 1, qy: s >> 1,
+        dly: R() * 140,
+        life: 1100 + R() * 1100,
+        vx: 80 + R() * 240,
+        vy: -(20 + R() * 180) + (R() - 0.5) * 80,
+        ta: R() * TAU, tf: 2 + R() * 3, tm: 6 + R() * 16
+      });
+    }
+    mods.push({ r: r0, c: c0, sx: Math.cos(ang) * rad, sy: Math.sin(ang) * rad, asmT: ASM0 + fa * ASM_SPAN, brkT: DIS0 + fb * DIS_SPAN, subs: subs });
+  }
+
+  /* ---------- DOM + canvas ---------- */
+  var cv = document.getElementById('bg'), ctx = cv.getContext('2d');
+  var slot = document.getElementById('slot'), stage = document.getElementById('stage');
+  var word = document.getElementById('word'), ver = document.getElementById('ver');
+  var head = document.getElementById('head');
+  var W = 0, H = 0, dpr = 1, pairs = [], dust = [];
+
+  function setupScene() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var rr = rng(3), k = clamp(W / 1200, 0.6, 1.2), count = Math.round(clamp(W * H / 52000, 10, 26)), i;
+    pairs = []; dust = [];
+    for (i = 0; i < count; i++) pairs.push({ x: rr() * W, y: rr() * (H + 80), s: (10 + rr() * 22) * k, sp: 4 + rr() * 10, al: 0.4 + rr() * 0.55 });
+    for (i = 0; i < 70; i++) dust.push({ x: rr() * W, y: rr() * H, r: 0.6 + rr() * 1.1, ph: rr() * TAU, sp: 0.4 + rr() * 1.2 });
+  }
+
+  function applyPalette(key) {
+    cur = PAL[key];
+    var st = document.documentElement.style;
+    st.setProperty('--bg', rgb(cur.bg)); st.setProperty('--a0', rgb(cur.a0)); st.setProperty('--a', rgb(cur.a));
+    st.setProperty('--b', rgb(cur.b)); st.setProperty('--ice', rgb(cur.ice)); st.setProperty('--deep', rgb(cur.deep));
+    st.setProperty('--stroke', rgb(cur.stroke)); st.setProperty('--glow', rgba(cur.glow, 0.55));
+    rowCols = [];
+    for (var r = 0; r < N; r++) rowCols.push(rgb(mix(cur.a, cur.b, r / (N - 1))));
+    iceStr = rgb(cur.ice);
+    document.querySelectorAll('.chip').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-pal') === key)); });
+    if (reduce) draw(STATIC_T, 0);
+  }
+
+  function titleAlpha(t) {
+    if (t < FO0) return 1;
+    if (t < FO1) return 1 + (DIM - 1) * smooth((t - FO0) / (FO1 - FO0));
+    if (t < FI0) return DIM;
+    if (t < FI1) return DIM + (1 - DIM) * smooth((t - FI0) / (FI1 - FI0));
+    return 1;
+  }
+  function qrPresence(t) { return clamp(clamp((t - 1500) / 1200) - clamp((t - DIS0 - 300) / 1500)); }
+
+  function draw(t, ts) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = rgb(cur.bg);
+    ctx.fillRect(0, 0, W, H);
+
+    var sr = stage.getBoundingClientRect();
+    var cx = sr.left + sr.width / 2, cy = sr.top + sr.height / 2;
+    var pres = qrPresence(t), i;
+
+    /* glow rings */
+    var Rr = clamp(W * 0.48, 220, 430) * (1 + 0.02 * Math.sin(ts * 0.0008));
+    var ga = 0.04 * (1 + 0.7 * pres);
+    ctx.fillStyle = rgba(cur.glow, ga);
+    for (i = 0; i < 9; i++) {
+      var rx = Rr * (1 - i / 9);
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx, rx * 0.64, 0, 0, TAU); ctx.fill();
+    }
+
+    /* pixel pairs */
+    for (i = 0; i < pairs.length; i++) {
+      var p = pairs[i], py = ((p.y - p.sp * ts / 1000) % (H + 80) + (H + 80)) % (H + 80) - 40;
+      ctx.fillStyle = rgba(cur.deep, p.al);
+      ctx.fillRect(p.x, py, p.s, p.s);
+      ctx.fillRect(p.x + p.s * 0.85, py + p.s * 0.85, p.s * 0.8, p.s * 0.8);
+    }
+
+    /* dust */
+    ctx.fillStyle = rgb(cur.a);
+    for (i = 0; i < dust.length; i++) {
+      var d = dust[i];
+      ctx.globalAlpha = 0.12 + 0.3 * (0.5 + 0.5 * Math.sin(ts * 0.001 * d.sp + d.ph));
+      ctx.fillRect(d.x, d.y, d.r, d.r);
+    }
+    ctx.globalAlpha = 1;
+
+    /* vignette */
+    var vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+    vg.addColorStop(0, rgba(cur.bg, 0));
+    vg.addColorStop(1, rgba(cur.bg, 0.7));
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+    /* title fade */
+    var ta = titleAlpha(t);
+    word.style.opacity = ta.toFixed(3);
+    ver.style.opacity = ta.toFixed(3);
+
+    /* QR */
+    var qr = slot.getBoundingClientRect(), S = qr.width, ox = qr.left, oy = qr.top, cell = S / N, sc = S / 300;
+    if (S < 8 || t < ASM0) return;
+    var scanOn = t >= SCAN0 && t <= SCAN1, ly = oy + clamp((t - SCAN0) / (SCAN1 - SCAN0)) * S;
+    var m, x, y, u, e, size = cell * 0.84, inset = cell * 0.08;
+
+    for (i = 0; i < mods.length; i++) {
+      m = mods[i];
+      if (t < m.asmT || t >= m.brkT) continue;
+      u = clamp((t - m.asmT) / ASM_DUR); e = easeOut(u);
+      x = ox + m.c * cell + inset + m.sx * S * (1 - e);
+      y = oy + m.r * cell + inset + m.sy * S * (1 - e);
+      var sz = size * (0.4 + 0.6 * e), off = (size - sz) / 2;
+      var hot = scanOn && Math.abs(oy + (m.r + 0.5) * cell - ly) < cell * 1.4;
+      ctx.globalAlpha = Math.min(1, e * 1.7);
+      ctx.fillStyle = hot ? iceStr : rowCols[m.r];
+      ctx.fillRect(x + off, y + off, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+
+    if (scanOn) {
+      var g = ctx.createLinearGradient(0, ly - 14, 0, ly + 14);
+      g.addColorStop(0, rgba(cur.ice, 0)); g.addColorStop(0.5, rgba(cur.ice, 0.5)); g.addColorStop(1, rgba(cur.ice, 0));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = g; ctx.fillRect(ox - 10, ly - 14, S + 20, 28);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    /* particles */
+    if (t >= DIS0) {
+      ctx.globalCompositeOperation = 'lighter';
+      var ss = size / 2, j, sp, tau, ul, al, px, py2, col;
+      for (i = 0; i < mods.length; i++) {
+        m = mods[i];
+        if (t < m.brkT) continue;
+        var bx = ox + m.c * cell + inset, by = oy + m.r * cell + inset;
+        for (j = 0; j < 4; j++) {
+          sp = m.subs[j];
+          tau = (t - m.brkT - sp.dly) / 1000;
+          x = bx + sp.qx * ss; y = by + sp.qy * ss;
+          if (tau <= 0) { ctx.globalAlpha = 1; ctx.fillStyle = rowCols[m.r]; ctx.fillRect(x, y, ss, ss); continue; }
+          if (tau * 1000 >= sp.life) continue;
+          ul = tau * 1000 / sp.life;
+          px = x + sp.vx * sc * tau * (1 + 0.4 * tau) + Math.sin(tau * sp.tf + sp.ta) * sp.tm * sc * tau;
+          py2 = y + sp.vy * sc * tau - 30 * sc * tau * tau + Math.cos(tau * sp.tf + sp.ta) * sp.tm * 0.6 * sc * tau;
+          al = Math.pow(1 - ul, 1.4);
+          col = ul < 0.12 ? iceStr : rowCols[m.r];
+          var ps = ss * (1 - 0.7 * ul);
+          ctx.globalAlpha = al; ctx.fillStyle = col;
+          ctx.fillRect(px, py2, ps, ps);
+        }
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  /* ---------- loop ---------- */
+  var t0 = performance.now(), raf = 0;
+  function frame(now) {
+    var t = (now - t0) % T;
+    if (t < 0) t += T;
+    draw(t, now);
+    head.style.left = (t / T * 100).toFixed(2) + '%';
+    raf = requestAnimationFrame(frame);
+  }
+  function start() {
+    cancelAnimationFrame(raf);
+    if (reduce) { draw(STATIC_T, 0); return; }
+    t0 = performance.now(); raf = requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', function () { setupScene(); if (reduce) draw(STATIC_T, 0); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (reduce) draw(STATIC_T, 0); });
+
+  document.querySelectorAll('.chip').forEach(function (b) {
+    b.addEventListener('click', function () { applyPalette(b.getAttribute('data-pal')); });
+  });
+  document.getElementById('replay').addEventListener('click', function () { t0 = performance.now(); });
+
+  var copyBtn = document.getElementById('copyPrompt'), pre = document.getElementById('promptText');
+  copyBtn.addEventListener('click', function () {
+    function done(msg) { copyBtn.textContent = msg; setTimeout(function () { copyBtn.textContent = 'Copy prompt'; }, 1800); }
+    function fallback() {
+      document.getElementById('promptBox').open = true;
+      var rg = document.createRange(); rg.selectNodeContents(pre);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+      done('Selected, press Ctrl+C');
+    }
+    try {
+      navigator.clipboard.writeText(pre.textContent).then(function () { done('Copied'); }, fallback);
+    } catch (err) { fallback(); }
+  });
+
+  setupScene();
+  applyPalette('aqua');
+  start();
+})();
+</script>

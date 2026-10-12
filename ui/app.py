@@ -1,9 +1,11 @@
 import customtkinter as ctk
+import traceback
 
 from ui.header import Header
 from ui.sidebar import Sidebar
 from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
+from ui.splash import Splash, splash_disabled
 
 from config import (
     APP_NAME,
@@ -13,6 +15,7 @@ from config import (
     WINDOW_MIN_HEIGHT,
 )
 
+from utils import settings_store
 from utils.theme_manager import ThemeManager
 
 
@@ -37,13 +40,15 @@ class QRCodeStudioApp:
     }
 
     def __init__(self):
+        # The theme chosen last time (Settings or the intro's palette chips).
+        ThemeManager.load_saved()
         theme = ThemeManager.get_theme()
 
         # ==========================
         # Theme
         # ==========================
 
-        ctk.set_appearance_mode("Dark")
+        ctk.set_appearance_mode(ThemeManager.get_mode())
         ctk.set_default_color_theme("blue")
 
         # ==========================
@@ -132,6 +137,12 @@ class QRCodeStudioApp:
         """Re-apply the active theme across the shell, pages and components."""
         theme = ThemeManager.get_theme()
 
+        ThemeManager.apply_mode(self.root)
+        # Generic pass first: every widget colour that belongs to the previous
+        # theme moves to the same token of the new one (covers any widget a
+        # component's own refresh_theme does not know about).
+        ThemeManager.retheme_tree(self.root)
+
         self.root.configure(fg_color=theme["background"])
         self.sidebar.refresh_theme()
         self.header.refresh_theme()
@@ -150,5 +161,114 @@ class QRCodeStudioApp:
 
     # ==================================================
 
-    def run(self):
+    def _maximize(self):
+        """Fill the available screen work area (respects the Windows taskbar).
+
+        Uses the reliable Windows ``state("zoomed")`` first, then falls back to
+        ``-zoomed`` / a manual work-area geometry. Safe on any platform.
+        """
+        root = self.root
+        try:
+            root.update_idletasks()
+        except Exception:
+            pass
+        # Primary: native "zoomed" window state (Windows maximized).
+        try:
+            root.state("zoomed")
+            return
+        except Exception:
+            pass
+        # Fallback 1: -zoomed attribute.
+        try:
+            root.attributes("-zoomed", True)
+            return
+        except Exception:
+            pass
+        # Fallback 2: size to the usable work area manually.
+        try:
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            root.geometry(f"{sw}x{sh - 48}+0+0")  # leave room for a taskbar
+        except Exception:
+            pass
+
+    def run(self, show_splash: bool = True):
+        """Enter the Tk main loop, playing the cinematic intro first.
+
+        The splash is a borderless ``Toplevel`` owned by the real root window,
+        so no second application window is ever created. The main window is
+        withdrawn before it can map on-screen, maximized, then deiconified
+        exactly once when the intro finishes (or immediately if the intro is
+        disabled / unavailable). Honors ``QRSTUDIO_NO_SPLASH=1`` /
+        ``--no-splash`` / ``--fast`` via :func:`ui.splash.splash_disabled`.
+        """
+        use_splash = (bool(show_splash) and not splash_disabled()
+                      and bool(settings_store.get("splash_enabled", True)))
+        if not use_splash:
+            # Maximize BEFORE the first map so no small window ever flashes.
+            self._maximize()
+            try:
+                self.root.deiconify()
+            except Exception:
+                pass
+            self.root.mainloop()
+            return
+
+        # Hide the real window before the mainloop maps it, so the opening
+        # frame is pure AMOLED black with no title-bar flash.
+        try:
+            self.root.withdraw()
+        except Exception:
+            pass
+
+        started = [False]
+
+        def _on_intro_palette(palette):
+            # A palette chip on the intro also picks the matching app theme
+            # (remembered); it is applied before the main window is revealed.
+            ThemeManager.set_theme(ThemeManager.theme_for_palette(palette))
+
+        def _show_main():
+            if ThemeManager.needs_retheme():
+                self.refresh_theme()
+            # Maximize first, then reveal: the very first mapped frame is
+            # already full-screen (no small window before maximization).
+            self._maximize()
+            try:
+                self.root.deiconify()
+            except Exception:
+                pass
+            try:
+                self.root.lift()
+                self.root.focus_force()
+            except Exception:
+                pass
+
+
+        splash = None
+        try:
+            splash = Splash(on_done=_show_main,
+                            palette=ThemeManager.splash_palette(),
+                            on_palette=_on_intro_palette)
+            started[0] = splash.start(self.root)
+        except Exception:
+            # Never swallow this silently — a bare `except` here is what hid
+            # the original crash (Scene.__init__ raised on every launch and the
+            # splash simply never started, with no traceback anywhere).
+            traceback.print_exc()
+            started[0] = False
+            if splash is not None:
+                try:
+                    splash.stop()
+                except Exception:
+                    pass
+        if not started[0]:
+            # Splash could not start — never trap the user on a withdrawn
+            # window. Reveal from an after() callback: CustomTkinter's
+            # CTk.mainloop() prelude hides the root once to recolour the
+            # Windows title bar and only re-maps it itself when withdraw() was
+            # NOT called before the first show (we do call it, to keep the root
+            # hidden behind the intro). Revealing before mainloop() therefore
+            # got undone, leaving the app permanently invisible.
+            self.root.after(0, _show_main)
         self.root.mainloop()

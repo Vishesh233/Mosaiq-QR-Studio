@@ -153,7 +153,7 @@ class ScanUploadCard(ctk.CTkFrame):
             corner_radius=12,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
-            text_color=theme["text"],
+            text_color=theme["on_primary"],
             command=self.choose_image
         )
 
@@ -370,7 +370,8 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.browse_button.configure(
             fg_color=theme["primary"],
-            hover_color=theme["primary_hover"]
+            hover_color=theme["primary_hover"],
+            text_color=theme["on_primary"]
         )
 
         if hasattr(self, "clear_button"):

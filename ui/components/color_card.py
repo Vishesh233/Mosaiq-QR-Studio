@@ -136,11 +136,15 @@ class ColorCard(ctk.CTkFrame):
             height=34,
             text="",
             corner_radius=17,
+            border_width=1,
+            border_color=theme["border"],
             fg_color=self.qr_color if color_type == "qr" else self.bg_color,
             hover=False,
             command=lambda: self.choose_color(color_type)
         )
 
+        # Shows the user's colour, never a theme token.
+        preview._theme_skip = True
         preview.pack(side="left")
 
         text_frame = ctk.CTkFrame(
@@ -217,6 +221,11 @@ class ColorCard(ctk.CTkFrame):
         self.qr_click.configure(
             text_color=theme["text_secondary"]
         )
+
+        # Swatches are skipped by the generic re-theme (they show the
+        # user's colours); only their border follows the theme.
+        self.qr_preview.configure(border_color=theme["border"])
+        self.bg_preview.configure(border_color=theme["border"])
 
         self.bg_click.configure(
             text_color=theme["text_secondary"]
