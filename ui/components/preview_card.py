@@ -144,7 +144,7 @@ class PreviewCard(ctk.CTkFrame):
         rows = [
             ("Format", "PNG"),
             ("Error Correction", "H"),
-            ("Resolution", "1200 × 1200 px")
+            ("Resolution", "—")             # set from the generated image
         ]
 
         for index, (left, right) in enumerate(rows):
@@ -184,11 +184,14 @@ class PreviewCard(ctk.CTkFrame):
                 text_color=theme["text_secondary"]
             ).pack(side="left")
 
-            ctk.CTkLabel(
+            value = ctk.CTkLabel(
                 row,
                 text=right,
                 font=("Segoe UI Semibold", 13)
-            ).pack(side="right")
+            )
+            value.pack(side="right")
+            if left == "Resolution":
+                self.resolution_label = value
 
             if index < len(rows) - 1:
 
@@ -209,6 +212,9 @@ class PreviewCard(ctk.CTkFrame):
 
         # Hide placeholder
         self.placeholder.place_forget()
+
+        # Save writes this same image, so this is the saved PNG's size.
+        self.resolution_label.configure(text=f"{image.width} × {image.height} px")
 
         # Resize image for preview
         preview = image.copy()
@@ -257,6 +263,7 @@ class PreviewCard(ctk.CTkFrame):
             self.image_label = None
 
         self.ctk_image = None
+        self.resolution_label.configure(text="—")
 
         self.placeholder.place(
             relx=0.5,

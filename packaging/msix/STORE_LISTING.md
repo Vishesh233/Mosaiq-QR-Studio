@@ -1,7 +1,7 @@
 # Microsoft Store listing: Mosaiq QR Studio
 
 Text and settings to paste into Partner Center. The package is
-`dist\MosaiqQRStudio-2.0.0.0-x64.msix`, built by `build_msix.ps1`. Upload it as is;
+`dist\MosaiqQRStudio-2.0.1.0-x64.msix`, built by `build_msix.ps1`. Upload it as is;
 the Store signs it.
 
 ## Properties

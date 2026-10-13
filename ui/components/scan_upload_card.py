@@ -117,7 +117,7 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.title_label = ctk.CTkLabel(
             self.placeholder,
-            text="Drop your QR Image Here",
+            text="Select your QR Image",
             font=("Segoe UI Semibold", 18),
             text_color=theme["text"]
         )
@@ -131,7 +131,7 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.subtitle = ctk.CTkLabel(
             self.placeholder,
-            text="Drag & drop or click to browse",
+            text="Click to browse",
             font=("Segoe UI", 12),
             text_color=theme["text_secondary"]
         )
@@ -163,7 +163,7 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.supported_label = ctk.CTkLabel(
             self.placeholder,
-            text="PNG • JPG • JPEG • WEBP",
+            text="PNG • JPG • JPEG • WEBP • BMP",
             font=("Segoe UI", 11),
             text_color=theme["text_secondary"]
         )
@@ -299,11 +299,11 @@ class ScanUploadCard(ctk.CTkFrame):
         )
 
         self.title_label.configure(
-            text="Drop your QR Image Here"
+            text="Select your QR Image"
         )
 
         self.subtitle.configure(
-            text="Drag & drop or click to browse"
+            text="Click to browse"
         )
 
         self.browse_button.configure(
