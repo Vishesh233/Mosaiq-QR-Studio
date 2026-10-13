@@ -7,9 +7,9 @@ the Store signs it.
 ## Properties
 
 - **Category:** Utilities & tools (Productivity also fits)
-- **Privacy policy URL:** https://github.com/Vishesh233/QR-Code-Studio-v2/blob/main/PRIVACY.md
-- **Website:** https://github.com/Vishesh233/QR-Code-Studio-v2
-- **Support contact:** https://github.com/Vishesh233/QR-Code-Studio-v2/issues
+- **Privacy policy URL:** https://github.com/Vishesh233/Mosaiq-QR-Studio/blob/main/PRIVACY.md
+- **Website:** https://github.com/Vishesh233/Mosaiq-QR-Studio
+- **Support contact:** https://github.com/Vishesh233/Mosaiq-QR-Studio/issues
 - **System requirements:** Windows 10 version 1809 or later, 64-bit (x64)
 - **Product declarations:** no in-app purchases, no ads, no account, no network access
 

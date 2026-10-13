@@ -9,4 +9,4 @@ Mosaiq QR Studio runs entirely on your PC.
 - **Your files stay local.** Images you open for scanning or as a logo, and the QR codes you save, are read and written only on your PC, in the places you choose.
 - **Settings.** The app saves only your theme and intro-animation preference, in a small settings file under your Windows user profile. When the app is installed from the Microsoft Store, uninstalling it removes that file.
 
-Questions: open an issue at https://github.com/Vishesh233/QR-Code-Studio-v2/issues
+Questions: open an issue at https://github.com/Vishesh233/Mosaiq-QR-Studio/issues

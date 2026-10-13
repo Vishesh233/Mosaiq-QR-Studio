@@ -37,8 +37,8 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 Windows 10/11 and Python 3.13:
 
 ```powershell
-git clone https://github.com/Vishesh233/QR-Code-Studio-v2.git
-cd QR-Code-Studio-v2
+git clone https://github.com/Vishesh233/Mosaiq-QR-Studio.git
+cd Mosaiq-QR-Studio
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py
@@ -62,7 +62,7 @@ Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCo
 ## Project structure
 
 ```
-QR-Code-Studio-v2/
+Mosaiq-QR-Studio/
 ├── main.py, config.py
 ├── ui/                  # app shell, pages, components, settings dialog
 │   ├── splash.py        # animated intro (NumPy renderer)
