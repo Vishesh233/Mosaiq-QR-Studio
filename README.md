@@ -11,10 +11,10 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 - QR codes from any URL or text
 - Custom QR and background colours
 - Your logo in the centre (high error correction, so the code still scans)
-- Live preview, then save as a 1200 × 1200 PNG or copy it to the clipboard
+- Live preview, then save as PNG or copy it to the clipboard
 
 ### Scan
-- Decode a QR code from an image (PNG, JPG, JPEG, WEBP, BMP)
+- Decode a QR code from an image file (PNG, JPG/JPEG, WEBP, BMP) picked with the file browser; there is no webcam scanning
 - Links are detected and open in your browser with one click
 - Copy the decoded text
 
