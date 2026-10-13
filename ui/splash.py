@@ -110,12 +110,12 @@ STATIC_T = 3400
 # --- Palettes ---------------------------------------------------------------
 # Three coordinated looks shared by the splash (and, later, the app shell).
 # Aqua Mint is the reference palette, so the historic module-level names (BG, A,
-# B, ICE, GLOW, DEEP, STROKE and their normalised _F copies) still resolve to
+# B, ICE, GLOW, DEEP and their normalised _F copies) still resolve to
 # exactly the values they had before.
 #
 #   BG     near-black base           A0/A/B  title gradient A0 -> A -> B
 #   GLOW   restrained ambient glow   DEEP    drifting pixel pairs
-#   ICE    highlight / scan bar      STROKE  V2 hard shadow
+#   ICE    highlight / scan bar
 #
 # The QR row gradient is A -> B, so each palette spans its own two accents.
 
@@ -131,7 +131,6 @@ PALETTES = {
         "ICE": (184, 243, 255),
         "GLOW": (16, 72, 84),
         "DEEP": (13, 45, 52),
-        "STROKE": (27, 127, 143),
     },
     # Deep violet base, lilac -> pink core (reference page's "violet").
     "Ultraviolet": {
@@ -142,7 +141,6 @@ PALETTES = {
         "ICE": (240, 226, 255),
         "GLOW": (62, 32, 104),
         "DEEP": (34, 20, 62),
-        "STROKE": (96, 56, 168),
     },
     # Warm charcoal base, gold -> orange -> rose core (reference "ember").
     "Ember": {
@@ -153,7 +151,6 @@ PALETTES = {
         "ICE": (255, 236, 210),
         "GLOW": (104, 46, 22),
         "DEEP": (54, 28, 18),
-        "STROKE": (160, 74, 32),
     },
 }
 
@@ -165,7 +162,6 @@ B = _DEFAULT_COLORS["B"]
 ICE = _DEFAULT_COLORS["ICE"]
 GLOW = _DEFAULT_COLORS["GLOW"]
 DEEP = _DEFAULT_COLORS["DEEP"]
-STROKE = _DEFAULT_COLORS["STROKE"]
 
 # Normalised ([0, 1]) copies of the default palette. The renderer itself reads
 # the palette off the Scene (see Scene._apply_palette); these remain for the
@@ -315,7 +311,7 @@ def splash_rect(root):
 # =============================================================================
 # _Geometry — colour-agnostic scene data, built once per (W, H, ss) and shared
 # by every palette. The QR matrix, module / particle constants, ambient layout,
-# radial fields and the wordmark + V2 glyph masks do not depend on colour, so
+# radial fields and the title glyph mask do not depend on colour, so
 # switching palettes never pays for them twice. The palette-dependent paint
 # lives in :class:`Scene`, which delegates everything else here.
 # =============================================================================
@@ -419,15 +415,14 @@ class _Geometry:
         self.S = min(0.52 * W, 0.34 * H, 300)
         self.gap1 = clamp(0.03 * H, 14, 28)
         self.titleFS = clamp(0.072 * W, 26, 60)
-        self.verFS = clamp(0.17 * W, 72, 140)
         self.title_box_h = 1.05 * self.titleFS
-        self.ver_box_h = 0.95 * self.verFS
-        total = self.S + self.gap1 + self.title_box_h + 2 + self.ver_box_h
+        # QR + title only; the reference's "V2" line under the title was
+        # dropped for the Mosaiq branding, so the pair is centred on its own.
+        total = self.S + self.gap1 + self.title_box_h
         top = (H - total) / 2
         self.qr_x = (W - self.S) / 2
         self.qr_y = top
         self.title_box_top = top + self.S + self.gap1
-        self.ver_box_top = self.title_box_top + self.title_box_h + 2
         # QR cell geometry.
         self.cell = self.S / self.N
         self.size = 0.84 * self.cell
@@ -436,7 +431,6 @@ class _Geometry:
         # Baselines via the half-leading model (ascent 0.999, descent 0.201,
         # content 1.2 em) so glyph baselines land on the reference numbers.
         self.title_base = self.title_box_top + (self.title_box_h - CONTENT_EM * self.titleFS) / 2 + ASCENT_EM * self.titleFS
-        self.ver_base = self.ver_box_top + (self.ver_box_h - CONTENT_EM * self.verFS) / 2 + ASCENT_EM * self.verFS
 
     # -- Module / particle constants as arrays (buffer pixels) ---------------
     def _build_qr_arrays(self):
@@ -514,12 +508,12 @@ class _Geometry:
         self._e0g = np.sqrt(gxr[None, :] ** 2 + (gyr[:, None] / 0.64) ** 2).astype(np.float32)
         self._vig_g = self._vig[gy0:gy1, gx0:gx1]
 
-    # -- Text glyph masks (title + V2) — palette independent --------------------
+    # -- Title glyph mask — palette independent ----------------------------------
     def _build_glyphs(self):
-        """Glyph coverage of the title and V2 layers, plus their alpha.
+        """Glyph coverage of the title layer, plus its alpha.
 
-        Each mask is padded by 3 sigma so its blurred glow is never clipped.
-        The layers are stacked with exact source-over alpha
+        The mask is padded by 3 sigma so its blurred glow is never clipped.
+        The fill sits over the glow with exact source-over alpha
         (a = a_top + a_below * (1 - a_top)); only the colours depend on the
         palette (see :meth:`Scene._apply_palette`).
         """
@@ -536,24 +530,6 @@ class _Geometry:
         self._title_width = width
         self._title_glow = self._blur(mask, t_sigma) * 0.22
         self._title_alpha = mask + self._title_glow * (1.0 - mask)
-
-        # V2, bottom to top: glow (sigma 22 at 140 px, GLOW at 0.55), hard
-        # shadow (+3 px, +3 px at 140 px, opaque STROKE), ICE fill. Sigma and
-        # offset scale with the font size relative to the 140 px reference.
-        v_sigma = 22.0 * self.verFS / 140.0 * ss
-        sh = max(1, int(round(3.0 * self.verFS / 140.0 * ss)))
-        pad = max(int(math.ceil(3.0 * v_sigma)) + 2, sh + 2)
-        x0, y0, mask, width = self._glyph_mask(
-            "V2", self._font(self.verFS), 0.0, self.ver_base, self.W / 2.0, pad_px=pad)
-        self._v2_ox, self._v2_oy = x0, y0
-        self._v2_mask = mask
-        self._v2_width = width
-        self._sh_x = self._sh_y = sh
-        self._v2_glow = self._blur(mask, v_sigma) * 0.55
-        self._v2_shadow = np.zeros_like(mask)      # the padding keeps it in the box
-        self._v2_shadow[sh:, sh:] = mask[:-sh, :-sh]
-        under = self._v2_shadow + self._v2_glow * (1.0 - self._v2_shadow)
-        self._v2_alpha = mask + under * (1.0 - mask)
 
     # -- Fonts (pixel resolution) --------------------------------------------
     def _font(self, css_px):
@@ -603,7 +579,7 @@ class _Geometry:
 # Everything colour-agnostic lives in the cached geometry (QR matrix, module /
 # particle constants, ambient layout, radial fields, glyph masks + alpha). This
 # class owns only what a palette switch must recompute: the QR row gradient,
-# the wordmark / V2 colour layers, the per-palette colour arrays and the
+# the title colour layer, the per-palette colour arrays and the
 # background plate. A switch is a few milliseconds and never touches the
 # timeline, the window or the geometry.
 # =============================================================================
@@ -724,13 +700,6 @@ class Scene:
         g = self._title_glow[..., None]
         self._title_layer = (grad[None, :, :] * m + acc_a * g * (1.0 - m)).astype(np.float32)
 
-        # --- V2: ICE fill over the STROKE shadow over the GLOW halo --------
-        stroke = np.array(col["STROKE"], np.float32) / 255.0
-        f = self._v2_mask[..., None]
-        s = self._v2_shadow[..., None]
-        g = self._v2_glow[..., None]
-        under = stroke * s + glow * g * (1.0 - s)
-        self._v2_layer = (ice * f + under * (1.0 - f)).astype(np.float32)
 
 
 # =============================================================================
@@ -1068,14 +1037,12 @@ def render_frame_into(sc, out, u8, t_ms, ts_ms=None, tiles=None, overlays=()):
                 if drawn is not None:
                     mark_many(*drawn)
 
-    # 5) Title, then V2 (drawn last), each one group at opacity alpha_title(t).
+    # 5) Title, as one group at opacity alpha_title(t).
     ta = title_alpha(t)
     if ta > 0:
         _blit_over(out, sc._title_layer, sc._title_alpha, sc._tx0, sc._ty0, ta)
-        _blit_over(out, sc._v2_layer, sc._v2_alpha, sc._v2_ox, sc._v2_oy, ta)
-        for (lay, ox_, oy_) in ((sc._title_alpha, sc._tx0, sc._ty0),
-                                (sc._v2_alpha, sc._v2_ox, sc._v2_oy)):
-            mark(ox_, oy_, ox_ + lay.shape[1], oy_ + lay.shape[0])
+        lay = sc._title_alpha
+        mark(sc._tx0, sc._ty0, sc._tx0 + lay.shape[1], sc._ty0 + lay.shape[0])
 
     # 6) Overlays on top of everything (the palette chips).
     for (layer, alpha, ox_, oy_) in overlays:
@@ -1120,10 +1087,10 @@ def render_frame(t_ms, ts_ms=None):
 
 
 # =============================================================================
-# Title / V2 alpha and static layer helpers
+# Title alpha and static layer helpers
 # =============================================================================
 def title_alpha(t):
-    """Opacity of the title + V2 layers as defined by the reference spec."""
+    """Opacity of the title layer as defined by the reference spec."""
     if t < FO0:
         return 1.0
     if t < FO1:

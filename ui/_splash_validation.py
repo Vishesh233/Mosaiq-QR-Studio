@@ -8,7 +8,8 @@ Implements section 7 of the reference spec (reference/qr-splash-reference.html):
 2. Numeric checks: one module per dark cell of reference/qr_matrix.json; all
    formed (e = 1) by t = 2.8 s; none broken at t = 4.4 s; no particle left at
    t >= 8.5 s (the last ends by 8440 ms); alpha_title at 0 / 2.6 / 7.6 / 8.8 s;
-   the mulberry32 self-test; the section 2 layout numbers at 1280x800.
+   the mulberry32 self-test; the section 2 layout numbers at 1280x800
+   (re-centred without the reference's "V2" line).
 3. Frame time of ``render_frame_into`` over the one-shot timeline. The
    on-screen blit (PhotoImage paste + canvas redraw) adds ~8 ms on top.
 
@@ -85,22 +86,22 @@ def main():
           "mulberry32(3) self-test")
 
     title_x = sc.W / 2.0 - sc._title_width / 2.0
-    ver_x = sc.W / 2.0 - sc._v2_width / 2.0
     pad = 0.12 * sc.titleFS
+    # Reference numbers, with the reference's "V2" line removed: QR (272) +
+    # gap (24) + title box (63) = 359 px, centred in 800 -> top at 220.5.
     for label, got, want in (
             ("QR slot x", sc.qr_x, 504.0),
-            ("QR slot y", sc.qr_y, 153.0),
+            ("QR slot y", sc.qr_y, 220.5),
             ("QR side", sc.S, 272.0),
-            ("title line box top", sc.title_box_top, 449.0),
-            ("title line box bottom", sc.title_box_top + sc.title_box_h, 512.0),
-            ("title baseline", sc.title_base, 504.0),
-            ("V2 line box top", sc.ver_box_top, 514.0),
-            ("V2 line box bottom", sc.ver_box_top + sc.ver_box_h, 647.0),
-            ("V2 baseline", sc.ver_base, 636.0),
-            ("V2 text x", ver_x, 552.1),
-            ("V2 text width", sc._v2_width, 175.7)):
+            ("title line box top", sc.title_box_top, 516.5),
+            ("title line box bottom", sc.title_box_top + sc.title_box_h, 579.5),
+            ("title baseline", sc.title_base, 571.9)):
         check(abs(got - want) <= LAYOUT_TOLERANCE_PX,
-              "%s %.1f (reference %.1f)" % (label, got, want))
+              "%s %.1f (expected %.1f)" % (label, got, want))
+    bottom = sc.H - (sc.title_box_top + sc.title_box_h)
+    check(abs(sc.qr_y - bottom) <= LAYOUT_TOLERANCE_PX,
+          "QR + title centred vertically (top %.1f, bottom %.1f)" % (sc.qr_y, bottom))
+    check(not hasattr(sc, "_v2_layer"), "no V2 layer in the scene")
     # The reference measured the title x / width for "QR CODE STUDIO"; the
     # rebranded title is checked for centring and for fitting in the frame.
     check(abs(title_x + sc._title_width / 2.0 - sc.W / 2.0) <= LAYOUT_TOLERANCE_PX,
