@@ -19,6 +19,9 @@ Public API:
     logo_ctk_image(size=38)            -> customtkinter.CTkImage
     render_lockup(width=640, ...)      -> PIL.Image (RGBA) stacked symbol + wordmark
     save_logo_assets(...)              -> write reusable PNGs under assets/logo
+    render_app_icon(size=256)          -> PIL.Image (RGBA) mark on a dark rounded plate
+    save_app_icon(path=APP_ICON)       -> write the multi-size Windows .ico
+    apply_window_icon(window)          -> brand icon in a window's title bar
 """
 
 from __future__ import annotations
@@ -43,6 +46,9 @@ BRAND_WHITE = (243, 246, 250)
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO_DIR = os.path.join(_REPO_ROOT, "assets", "logo")
+# Shipped with the app (the PyInstaller spec bundles it under assets/).
+APP_ICON = os.path.join(_REPO_ROOT, "assets", "app.ico")
+ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 
 _cache: dict = {}
 
@@ -331,7 +337,7 @@ _WORD_STOPS = [
 ]
 
 
-def render_wordmark(width: int = 520, text: str = "QR STUDIO",
+def render_wordmark(width: int = 520, text: str = "MOSAIQ",
                     glow: bool = True, slant: float = 0.22) -> Image.Image:
     """Render the bold, italic, gradient wordmark (RGBA).
 
@@ -384,7 +390,7 @@ def render_wordmark(width: int = 520, text: str = "QR STUDIO",
     return base
 
 def render_lockup(width: int = 640, glow: bool = True) -> Image.Image:
-    """Symbol stacked above the gradient ``QR STUDIO`` wordmark (RGBA).
+    """Symbol stacked above the gradient ``MOSAIQ`` wordmark (RGBA).
 
     Used to emit reusable brand assets (README / installer / docs); the app
     itself composes the symbol and wordmark at runtime.
@@ -434,6 +440,58 @@ def save_logo_assets(sizes=(256, 128, 64, 48, 32, 24), directory: str = LOGO_DIR
     render_lockup(640).save(p)
     paths.append(p)
     return paths
+
+
+def render_app_icon(size: int = 256) -> Image.Image:
+    """The mark on a near-black rounded plate with a faint cyan rim.
+
+    The bare mark's glow washes out on light backgrounds (light taskbar, the
+    Daylight theme's title bar); the plate keeps it legible on both.
+    """
+    s = int(size)
+    ss = 4
+    R = s * ss
+    plate = Image.new("RGBA", (R, R), (0, 0, 0, 0))
+    rim = max(ss, int(round(R / 64)))
+    ImageDraw.Draw(plate).rounded_rectangle(
+        (0, 0, R - 1, R - 1), radius=int(R * 0.22),
+        fill=(10, 14, 20, 255), outline=ACCENT + (90,), width=rim)
+    plate = plate.resize((s, s), Image.LANCZOS)
+
+    inner = max(1, int(round(s * 0.80)))
+    mark = render_logo(inner)                  # renders at least 16 px
+    if mark.width != inner:
+        mark = mark.resize((inner, inner), Image.LANCZOS)
+    off = (s - inner) // 2
+    plate.alpha_composite(mark, (off, off))
+    return plate
+
+
+def save_app_icon(path: str = APP_ICON):
+    """Write the Windows icon, rendering each size separately so small ones stay crisp.
+
+    Frames are stored as BMP, not Pillow's default PNG: Tk cannot read the size
+    of PNG frames, falls back to the first (16 px) one and Windows stretches it
+    into a blurry title-bar / taskbar icon.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    images = [render_app_icon(s) for s in ICON_SIZES]
+    images[-1].save(path, format="ICO", sizes=[(s, s) for s in ICON_SIZES],
+                    append_images=images[:-1], bitmap_format="bmp")
+    return path
+
+
+def apply_window_icon(window):
+    """Show the brand icon in ``window``'s title bar instead of CustomTkinter's.
+
+    CustomTkinter swaps in its own icon 200 ms after a window is created unless
+    iconbitmap() was called on it, so call this right after creating a window.
+    """
+    if os.path.exists(APP_ICON):
+        try:
+            window.iconbitmap(APP_ICON)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":  # convenience: python -m ui.brand_logo

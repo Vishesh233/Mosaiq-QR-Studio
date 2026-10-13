@@ -6,6 +6,7 @@ from ui.sidebar import Sidebar
 from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
 from ui.splash import Splash, splash_disabled
+from ui.brand_logo import apply_window_icon
 
 from config import (
     APP_NAME,
@@ -57,6 +58,7 @@ class QRCodeStudioApp:
 
         self.root = ctk.CTk()
         self.root.title(APP_NAME)
+        apply_window_icon(self.root)
         self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         self.root.minsize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
         self.root.configure(fg_color=theme["background"])
@@ -204,15 +206,6 @@ class QRCodeStudioApp:
         """
         use_splash = (bool(show_splash) and not splash_disabled()
                       and bool(settings_store.get("splash_enabled", True)))
-        if not use_splash:
-            # Maximize BEFORE the first map so no small window ever flashes.
-            self._maximize()
-            try:
-                self.root.deiconify()
-            except Exception:
-                pass
-            self.root.mainloop()
-            return
 
         # Hide the real window before the mainloop maps it, so the opening
         # frame is pure AMOLED black with no title-bar flash.
@@ -244,6 +237,13 @@ class QRCodeStudioApp:
             except Exception:
                 pass
 
+        if not use_splash:
+            # Reveal from an after() callback (see below): maximizing before
+            # mainloop() was undone by CustomTkinter's title-bar prelude, so
+            # the window opened un-maximized.
+            self.root.after(0, _show_main)
+            self.root.mainloop()
+            return
 
         splash = None
         try:

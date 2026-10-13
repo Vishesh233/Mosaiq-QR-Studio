@@ -1,11 +1,11 @@
 <#
-    QR Code Studio v2 - Windows build script (PyInstaller, one-folder).
+    Mosaiq QR Studio - Windows build script (PyInstaller, one-folder).
 
     Usage (from the repository root, with the .venv present):
         .\build.ps1
 
     Output:
-        dist\QRCodeStudio\QRCodeStudio.exe   (run this; keep the folder intact)
+        dist\MosaiqQRStudio\MosaiqQRStudio.exe   (run this; keep the folder intact)
 #>
 $ErrorActionPreference = "Stop"
 
@@ -35,7 +35,7 @@ finally {
     Pop-Location
 }
 
-$exe = Join-Path $root "dist\QRCodeStudio\QRCodeStudio.exe"
+$exe = Join-Path $root "dist\MosaiqQRStudio\MosaiqQRStudio.exe"
 if (Test-Path -LiteralPath $exe) {
     Write-Host ""
     Write-Host "==> BUILD OK" -ForegroundColor Green

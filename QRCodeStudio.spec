@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# PyInstaller spec for QR Code Studio v2 (Windows, one-folder build).
+# PyInstaller spec for Mosaiq QR Studio (Windows, one-folder build).
 #
 #   python -m PyInstaller --noconfirm --clean QRCodeStudio.spec
 #
-# Produces: dist\QRCodeStudio\QRCodeStudio.exe  (+ all DLLs/data next to it)
+# Produces: dist\MosaiqQRStudio\MosaiqQRStudio.exe  (+ all DLLs/data next to it)
 #
 # Notes:
 #   * GUI app -> console = False (no black console window).
@@ -31,6 +31,11 @@ datas += [
     (os.path.join(SPECPATH, "reference", "qr_matrix.json"), "reference"),
     (os.path.join(SPECPATH, "reference", "Exo2-BlackItalic.ttf"), "reference"),
 ]
+
+# ---- App icon: exe icon + window title bars (ui/brand_logo.apply_window_icon).
+#      Regenerate with ui.brand_logo.save_app_icon(). ----
+APP_ICON = os.path.join(SPECPATH, "assets", "app.ico")
+datas += [(APP_ICON, "assets")]
 
 
 def _collect_all(pkg):
@@ -63,7 +68,6 @@ for _pkg in (
     "win32gui",
     "win32con",
     "pywintypes",
-    "pythoncom",
     "pywin32_system32",
 ):
     _collect_all(_pkg)
@@ -85,6 +89,34 @@ hiddenimports += [
     "win32gui",
 ]
 
+# ---- Size trim: things the app never loads. Checked by running every feature
+#      (splash, generate + logo, save, scan, settings, themes) with an import
+#      trace; none of these was imported. ----
+EXCLUDES = [
+    "pyzbar",                       # not used; avoids needing libzbar-64.dll
+    "ssl", "_ssl", "_hashlib",      # no network access; drops OpenSSL (~9 MB)
+    "PIL._avif",                    # AVIF codec (~7.5 MB); pickers offer PNG/JPG/WEBP/BMP
+    "numpy.f2py", "numpy.testing", "numpy.typing",
+    "pythoncom", "win32com",        # no COM; the clipboard needs win32clipboard only
+]
+hiddenimports = [h for h in hiddenimports
+                 if ".tests" not in h and not h.startswith(tuple(EXCLUDES))]
+
+
+def _keep(entry):
+    """Drop files only needed to build or type-check, and the video plugin."""
+    dest = entry[0].replace("\\", "/").lower()
+    if "opencv_videoio_ffmpeg" in dest:      # FFmpeg video I/O (~29 MB): stills only
+        return False
+    if dest.rsplit("/", 1)[-1].startswith("pythoncom"):   # COM runtime DLL, unused
+        return False
+    if dest.startswith("numpy/") and (
+            "/tests/" in dest
+            or dest.startswith(("numpy/f2py/", "numpy/typing/", "numpy/testing/"))):
+        return False
+    return not dest.endswith((".pyi", ".pxd", ".h", ".c", ".lib", ".a"))
+
+
 a = Analysis(
     ["main.py"],
     pathex=[],
@@ -94,14 +126,14 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        "pyzbar",  # not used by the app; avoids needing libzbar-64.dll
-    ],
+    excludes=EXCLUDES,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+a.datas = [e for e in a.datas if _keep(e)]
+a.binaries = [e for e in a.binaries if _keep(e)]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
@@ -110,7 +142,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="QRCodeStudio",
+    name="MosaiqQRStudio",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -121,7 +153,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon="assets/app.ico",  # optional: add a .ico file and uncomment to set the exe icon
+    icon=APP_ICON,
 )
 
 coll = COLLECT(
@@ -132,5 +164,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="QRCodeStudio",
+    name="MosaiqQRStudio",
 )

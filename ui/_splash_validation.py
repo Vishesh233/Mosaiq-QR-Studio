@@ -5,16 +5,17 @@ Implements section 7 of the reference spec (reference/qr-splash-reference.html):
 1. Renders t = 0, 1.6, 2.4, 3.3, 4.1, 5.3, 6.2, 7.2, 8.5 s at 1280x800 with
    ``render_frame`` into ui/_splash_frames/ and builds a 3x3 contact sheet.
    Every frame is checked to stay in [0, 1] before it is quantised.
-2. Numeric checks: 558 modules; all formed (e = 1) by t = 2.8 s; none broken
-   at t = 4.4 s; no particle left at t >= 8.5 s (the last ends by 8440 ms);
-   alpha_title at 0 / 2.6 / 7.6 / 8.8 s; the mulberry32 self-test; the
-   section 2 layout numbers at 1280x800.
+2. Numeric checks: one module per dark cell of reference/qr_matrix.json; all
+   formed (e = 1) by t = 2.8 s; none broken at t = 4.4 s; no particle left at
+   t >= 8.5 s (the last ends by 8440 ms); alpha_title at 0 / 2.6 / 7.6 / 8.8 s;
+   the mulberry32 self-test; the section 2 layout numbers at 1280x800.
 3. Frame time of ``render_frame_into`` over the one-shot timeline. The
    on-screen blit (PhotoImage paste + canvas redraw) adds ~8 ms on top.
 
 Run:  .venv\\Scripts\\python.exe ui\\_splash_validation.py
 Exits non-zero when a check fails.
 """
+import json
 import os
 import sys
 import time
@@ -62,7 +63,9 @@ def main():
     # --- 2) numeric checks --------------------------------------------------
     print("numeric checks")
     sc = sp._scene()
-    check(sc.n_modules == 558, "558 dark modules (got %d)" % sc.n_modules)
+    with open(sp._QR_JSON, encoding="utf-8") as fh:
+        dark = sum(row.count("1") for row in json.load(fh)["rows"])
+    check(sc.n_modules == dark, "%d dark modules, as in qr_matrix.json (got %d)" % (dark, sc.n_modules))
     formed = float(np.max(sc.m_asm + sp.ASM_DUR))
     check(formed <= 2800.0, "every module fully formed by t = 2.8 s (last at %.0f ms)" % formed)
     broken = float(np.min(sc.m_brk))
@@ -91,10 +94,6 @@ def main():
             ("title line box top", sc.title_box_top, 449.0),
             ("title line box bottom", sc.title_box_top + sc.title_box_h, 512.0),
             ("title baseline", sc.title_base, 504.0),
-            ("title text x", title_x, 395.5),
-            ("title text width", sc._title_width, 489.1),
-            ("gradient box left", title_x - pad, 388.3),
-            ("gradient box right", title_x + sc._title_width + pad, 891.7),
             ("V2 line box top", sc.ver_box_top, 514.0),
             ("V2 line box bottom", sc.ver_box_top + sc.ver_box_h, 647.0),
             ("V2 baseline", sc.ver_base, 636.0),
@@ -102,6 +101,12 @@ def main():
             ("V2 text width", sc._v2_width, 175.7)):
         check(abs(got - want) <= LAYOUT_TOLERANCE_PX,
               "%s %.1f (reference %.1f)" % (label, got, want))
+    # The reference measured the title x / width for "QR CODE STUDIO"; the
+    # rebranded title is checked for centring and for fitting in the frame.
+    check(abs(title_x + sc._title_width / 2.0 - sc.W / 2.0) <= LAYOUT_TOLERANCE_PX,
+          "title centred (x %.1f, width %.1f)" % (title_x, sc._title_width))
+    check(title_x - pad >= 0 and title_x + sc._title_width + pad <= sc.W,
+          "title gradient box inside the frame (%.1f .. %.1f)" % (title_x - pad, title_x + sc._title_width + pad))
 
     # --- 3) frame time ------------------------------------------------------
     print("frame time: render_frame_into over the one-shot timeline, 60 fps sampling")

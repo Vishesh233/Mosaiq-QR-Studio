@@ -1,3 +1,4 @@
+import tkinter
 import webbrowser
 import customtkinter as ctk
 
@@ -172,6 +173,9 @@ class ScanResultCard(ctk.CTkFrame):
             fill="both",
             expand=True
         )
+        # Wrap at the width the label really gets: the fixed wraplength was
+        # wider than the box, so long URLs ran past its edge and were clipped.
+        self.result_label.bind("<Configure>", self._fit_result_wrap)
 
         # ----------------------------
         # Copy Button
@@ -291,6 +295,8 @@ class ScanResultCard(ctk.CTkFrame):
             self.clear()
             return
 
+        theme = ThemeManager.get_theme()
+
         is_url = (
             "www." in self.result.lower()
             or self.result.lower().startswith(("http://", "https://"))
@@ -360,6 +366,17 @@ class ScanResultCard(ctk.CTkFrame):
             state="normal"
         )
         self._style_copy_btn()
+
+    # ==================================================
+
+    def _fit_result_wrap(self, event):
+        # The label's canvas fills the space pack gives it; its inner text
+        # label only reports the size of the current text.
+        if not isinstance(event.widget, tkinter.Canvas):
+            return
+        width = int(event.width / self.result_label._get_widget_scaling()) - 8
+        if width > 40 and abs(width - self.result_label.cget("wraplength")) > 2:
+            self.result_label.configure(wraplength=width)
 
     # ==================================================
 

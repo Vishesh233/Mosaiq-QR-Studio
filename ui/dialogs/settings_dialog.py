@@ -3,6 +3,7 @@ import customtkinter as ctk
 from utils import settings_store
 from utils.theme_manager import ThemeManager
 from ui import icons
+from ui.brand_logo import apply_window_icon
 
 
 class SettingsDialog(ctk.CTkToplevel):
@@ -24,6 +25,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self._tiles = {}
 
         self.title("Settings")
+        apply_window_icon(self)
         self.geometry("760x660")
         self.resizable(False, False)
 
@@ -83,7 +85,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self.container,
-            text="Personalise how QR Code Studio looks. Themes preview instantly.",
+            text="Personalise how Mosaiq looks. Themes preview instantly.",
             font=("Segoe UI", 13),
             text_color=theme["text_secondary"],
         ).pack(anchor="w", padx=30, pady=(0, 18))

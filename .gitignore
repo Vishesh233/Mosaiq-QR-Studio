@@ -13,6 +13,9 @@ build/
 dist/
 *.manifest
 
+# MSIX build tools (downloaded by build_msix.ps1)
+.tools/
+
 # Test / session leftovers
 _test_qr.png
 _capture*.png

@@ -10,12 +10,12 @@ import json
 import os
 import sys
 
-from config import APP_NAME
+from config import SETTINGS_DIR_NAME
 
 
 def _settings_path():
     if sys.platform.startswith("win") and os.environ.get("APPDATA"):
-        folder = os.path.join(os.environ["APPDATA"], APP_NAME)
+        folder = os.path.join(os.environ["APPDATA"], SETTINGS_DIR_NAME)
     else:
         folder = os.path.join(os.path.expanduser("~"), ".qr_code_studio")
     return os.path.join(folder, "settings.json")

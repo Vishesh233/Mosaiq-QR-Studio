@@ -529,7 +529,7 @@ class _Geometry:
         # fill, i.e. a sigma-8 glow at 60 px (scaled with the font) at 0.22.
         t_sigma = 8.0 * self.titleFS / 60.0 * ss
         x0, y0, mask, width = self._glyph_mask(
-            "QR CODE STUDIO", self._font(self.titleFS), 0.01 * self.titleFS,
+            "MOSAIQ QR STUDIO", self._font(self.titleFS), 0.01 * self.titleFS,
             self.title_base, self.W / 2.0, pad_px=int(math.ceil(3.0 * t_sigma)) + 2)
         self._tx0, self._ty0 = x0, y0
         self._title_mask = mask

@@ -2,8 +2,13 @@
 # APP INFO
 # ==========================
 
-APP_NAME = "QR Code Studio"
+APP_NAME = "Mosaiq QR Studio"
+APP_SHORT_NAME = "Mosaiq"         # where space is tight (sidebar brand)
 APP_VERSION = "v2.0"
+
+# Settings folder under %APPDATA%. Keeps the pre-rebrand name on purpose so
+# existing installs keep their saved theme / intro preference.
+SETTINGS_DIR_NAME = "QR Code Studio"
 
 # ==========================
 # WINDOW

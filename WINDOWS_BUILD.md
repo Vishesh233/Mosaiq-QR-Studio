@@ -1,14 +1,16 @@
-# Windows Build & Release — QR Code Studio v2
+# Windows Build & Release — Mosaiq QR Studio
 
 This project is a **Python CustomTkinter desktop application** (not a web app).
 It is packaged for Windows with **PyInstaller** into a standalone `.exe`.
 
-No application source files were changed. Three new files were added for packaging:
+Packaging files:
 
 | File | Purpose |
 |------|---------|
-| `QRCodeStudio.spec` | PyInstaller build definition (hidden imports, data, DLLs). |
+| `QRCodeStudio.spec` | PyInstaller build definition (hidden imports, data, DLLs, size trim). |
 | `build.ps1` | One-command build script (installs PyInstaller, cleans, builds). |
+| `build_msix.ps1` | Microsoft Store package (MSIX) from the PyInstaller build (§7). |
+| `packaging/msix/` | MSIX manifest template, Store identity, logo renderer, Store listing text. |
 | `WINDOWS_BUILD.md` | This document (build / test / release steps). |
 
 ---
@@ -36,15 +38,23 @@ and the scanner was verified to work without it. The spec therefore **excludes `
 so **no external ZBar DLL (`libzbar-64.dll`) is required** for the packaged app.
 (If you ever add a `pyzbar`-based scanner, you must then bundle `libzbar-64.dll` — see §6.)
 
-### Important: only two repo data files are needed at runtime
+### Important: three repo data files are needed at runtime
 
 The splash intro (`ui/splash.py`) reads `reference/qr_matrix.json` and
-`reference/Exo2-BlackItalic.ttf`; the spec bundles both under `reference/`.
-The rest of `reference/` (the `.html` spec and `.mp4`) is dev-only and is not shipped.
+`reference/Exo2-BlackItalic.ttf`; the window icon is `assets/app.ico`. The spec bundles all
+three. `reference/qr-splash-reference.html` (the intro's design spec) is dev-only.
 
-The `assets/` folder only holds README screenshots, logo PNGs and thumbnails. The brand
-logo is rendered in code (`ui/brand_logo.py`), so nothing from `assets/` is loaded by the app.
+The rest of `assets/` (screenshots, thumbnails) is for the README and the Store listing.
 **CustomTkinter's own bundled assets** must also ship (handled by `collect_all("customtkinter")`).
+
+### Size trim
+
+The spec leaves out what the app never loads (checked by running every feature with an
+import trace): OpenCV's FFmpeg video plugin, OpenSSL (`ssl` / `_hashlib`), Pillow's AVIF
+codec, NumPy's tests / f2py / typing / testing, `.pyi` stubs, C headers and `pythoncom`.
+That takes the build from about 204 MB to 146 MB and the MSIX from 84 MB to 60 MB.
+Most of what is left is `cv2.pyd` (82 MB), which holds all of OpenCV in one file. If a new
+feature needs one of these (for example video or HTTPS), remove it from `EXCLUDES` / `_keep`.
 
 ---
 
@@ -85,11 +95,11 @@ cd "d:\Codes\qr code\QR-Code-Studio-v2"
 ### Result
 
 ```
-dist\QRCodeStudio\QRCodeStudio.exe    <-- the app
-dist\QRCodeStudio\_internal\...       <-- required DLLs and data (do NOT delete)
+dist\MosaiqQRStudio\MosaiqQRStudio.exe    <-- the app
+dist\MosaiqQRStudio\_internal\...       <-- required DLLs and data (do NOT delete)
 ```
 
-This is a **one-folder** build. Distribute the whole `dist\QRCodeStudio\` folder
+This is a **one-folder** build. Distribute the whole `dist\MosaiqQRStudio\` folder
 (or zip it). The `.exe` must stay next to its `_internal\` folder.
 
 ---
@@ -98,7 +108,7 @@ This is a **one-folder** build. Distribute the whole `dist\QRCodeStudio\` folder
 
 ```powershell
 cd "d:\Codes\qr code\QR-Code-Studio-v2"
-.\dist\QRCodeStudio\QRCodeStudio.exe
+.\dist\MosaiqQRStudio\MosaiqQRStudio.exe
 ```
 
 Manual test checklist:
@@ -133,17 +143,17 @@ cd "d:\Codes\qr code\QR-Code-Studio-v2"
    ```powershell
    cd "d:\Codes\qr code\QR-Code-Studio-v2"
    $ver = "v2.0"   # match config.py APP_VERSION if you prefer
-   Compress-Archive -Path "dist\QRCodeStudio" -DestinationPath "dist\QRCodeStudio-$ver-win64.zip" -Force
+   Compress-Archive -Path "dist\MosaiqQRStudio" -DestinationPath "dist\MosaiqQRStudio-$ver-win64.zip" -Force
    ```
 
 3. Go to the repo → **Releases** → **Draft a new release**.
 4. Create a tag (e.g. `v2.0`), title, and release notes.
-5. **Attach** `dist\QRCodeStudio-v2.0-win64.zip` (drag & drop) and **Publish**.
+5. **Attach** `dist\MosaiqQRStudio-v2.0-win64.zip` (drag & drop) and **Publish**.
 
 CLI alternative (GitHub CLI):
 
 ```powershell
-gh release create v2.0 "dist\QRCodeStudio-v2.0-win64.zip" --title "QR Code Studio v2.0" --notes "Windows build."
+gh release create v2.0 "dist\MosaiqQRStudio-v2.0-win64.zip" --title "Mosaiq QR Studio v2.0" --notes "Windows build."
 ```
 
 ---
@@ -155,9 +165,37 @@ gh release create v2.0 "dist\QRCodeStudio-v2.0-win64.zip" --title "QR Code Studi
   A one-file `.exe` can be produced by merging `COLLECT` into `EXE` (drop `COLLECT`, add `a.binaries`/`a.zipfiles`/`a.datas`
   to `EXE`) but expect slower startup and more antivirus false positives — test thoroughly if you switch.
 - **Antivirus / SmartScreen:** unsigned PyInstaller exes are often flagged. Users may need to click
-  "More info → Run anyway". Signing the exe requires a code-signing certificate (not included).
-- **`__pycache__/*.pyc` files are currently tracked in git.** Consider removing them from tracking and
-  adding a `.gitignore` (e.g. `__pycache__/`, `*.pyc`, `.venv/`, `build/`, `dist/`). This does not affect the build.
+  "More info → Run anyway". On PCs with **Smart App Control** on, an unsigned exe is blocked outright
+  (no "Run anyway"), including on the build machine itself. Signing the exe requires a code-signing
+  certificate (not included); the Microsoft Store route (§7) avoids this.
 - **If you later use `pyzbar`:** bundle `libzbar-64.dll` from the `pyzbar` wheel via
   `collect_all("pyzbar")` (or ship `libzbar-64.dll` next to the exe) and remove `pyzbar` from `excludes`.
-- **Optional exe icon:** add `assets/app.ico` and uncomment `icon="assets/app.ico"` in the spec.
+- **App icon:** `assets/app.ico` (exe + window title bars) is generated from the brand logo by
+  `ui.brand_logo.save_app_icon()`.
+
+---
+
+## 7. Microsoft Store (MSIX)
+
+The Store signs MSIX packages itself, so Store installs show no SmartScreen or
+Smart App Control warnings.
+
+1. In Partner Center, reserve the app name, then copy these from **Product management →
+   Product identity** into `packaging\msix\identity.json`: `Package/Identity/Name`,
+   `Package/Identity/Publisher` and `Package/Properties/PublisherDisplayName`. Put the
+   reserved name in `DisplayName`.
+2. Build:
+
+   ```powershell
+   .\build.ps1          # PyInstaller app in dist\MosaiqQRStudio
+   .\build_msix.ps1     # -> dist\MosaiqQRStudio-<version>-x64.msix
+   ```
+
+   `.\build_msix.ps1 -Test` packs with a dummy identity, only to check the build.
+   `makeappx` / `makepri` are downloaded once into `.tools\` (no Windows SDK needed).
+   Logo assets are rendered from `ui/brand_logo.py` by `packaging\msix\make_assets.py`.
+3. Upload the `.msix` under **Packages** in the submission. Do not sign it; the Store does.
+   `runFullTrust` asks for a one-line justification (it is a desktop app).
+4. Raise `Version` in `identity.json` for every new upload (the last part stays `0`).
+
+Test the Store-signed build through a private audience before making the listing public.

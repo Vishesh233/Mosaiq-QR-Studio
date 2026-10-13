@@ -7,7 +7,7 @@ application shell wiring is unchanged.
 """
 import customtkinter as ctk
 
-from config import APP_NAME, APP_VERSION, SIDEBAR_WIDTH
+from config import APP_NAME, APP_SHORT_NAME, APP_VERSION, SIDEBAR_WIDTH
 from utils.theme_manager import ThemeManager
 from ui import icons
 from ui.brand_logo import logo_ctk_image
@@ -75,12 +75,12 @@ class Sidebar(ctk.CTkFrame):
         text_col = ctk.CTkFrame(brand, fg_color="transparent")
         text_col.grid(row=0, column=1, sticky="w", padx=(12, 0))
         self._brand_title = ctk.CTkLabel(
-            text_col, text="QR CODE STUDIO",
+            text_col, text=APP_SHORT_NAME.upper(),
             font=("Segoe UI Semibold", 14), text_color=theme["text"],
         )
         self._brand_title.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
-            text_col, text=APP_VERSION,
+            text_col, text=f"QR Studio  ·  {APP_VERSION}",
             font=("Segoe UI", 11), text_color=theme["text_secondary"],
         ).grid(row=1, column=0, sticky="w")
 
