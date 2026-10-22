@@ -33,6 +33,16 @@ def _run():
     if not app.generate_page.winfo_ismapped():
         problems.append("generate_page not mapped after show_generate_page()")
 
+    # --- Sidebar: every nav button opens its page and shows as active ---
+    sb = app.sidebar
+    for key, page in (("scan", app.scan_page), ("generate", app.generate_page)):
+        sb._nav_buttons[key].invoke()
+        root.update_idletasks()
+        if sb.active_tab != key or not page.winfo_ismapped():
+            problems.append(f"sidebar item {key!r} did not open its page / become active")
+    if set(sb._nav_buttons) != set(sb._nav_icons) or not sb._nav_buttons:
+        problems.append("sidebar nav items and icons disagree")
+
     # --- Generate workflow: real QRGenerator path ---
     gp = app.generate_page
     gp.content_card.url_entry.delete(0, "end")

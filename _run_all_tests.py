@@ -6,8 +6,8 @@ Run:  .venv\\Scripts\\python.exe _run_all_tests.py [--exe] [--skip-desktop]
 --skip-desktop  skip the tests that use the real webcam, grab the screen or move the mouse
                 (_camera_test, _region_test, _dnd_test)
 
-_dnd_test drives the real mouse and is focus sensitive: if it fails it is run once more and
-both outcomes are reported.
+_dnd_test drives the real mouse and is focus/timing sensitive (it also fails now and then on
+the unchanged code): a failing run is retried up to twice and every failed attempt is printed.
 Exit code 0 = every test passed.
 """
 import glob
@@ -48,9 +48,11 @@ def main():
     failed = []
     for script in scripts:
         code, ok_line, tail, seconds = run(script)
-        if code != 0 and script in RETRY:
-            print(f"  {script}: first run failed (exit {code}), retrying once")
+        attempts = 1
+        while code != 0 and script in RETRY and attempts < 3:
+            print(f"  {script}: attempt {attempts} failed (exit {code}), retrying")
             code, ok_line, tail, seconds = run(script)
+            attempts += 1
         if code == 0:
             print(f"PASS {script:28s} {seconds:5.0f}s  {ok_line}")
         else:

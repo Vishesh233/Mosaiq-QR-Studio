@@ -13,7 +13,7 @@ from config import FONT_ICON
 
 # Logical name -> (MDL2 glyph, plain-text fallback)
 ICONS = {
-    "generate": ("\uE71E", "Generate"),
+    "generate": ("\uE945", "Generate"),
     "scan": ("\uEC4E", "Scan"),
     "settings": ("\uE713", "Settings"),
     "theme": ("\uE790", "Theme"),

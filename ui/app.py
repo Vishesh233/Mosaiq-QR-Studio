@@ -118,8 +118,8 @@ class QRCodeStudioApp:
         # Navigation wiring
         # ==========================
 
-        self.sidebar.set_generate_callback(self.show_generate_page)
-        self.sidebar.set_scan_callback(self.show_scan_page)
+        self.sidebar.add_nav_item("generate", "Generate", "generate", self.show_generate_page)
+        self.sidebar.add_nav_item("scan", "Scan QR", "scan", self.show_scan_page)
 
         # Set the initial top bar copy to match the default page.
         self._apply_screen_meta("generate")
@@ -143,11 +143,13 @@ class QRCodeStudioApp:
         self.scan_page.on_hide()
         self.scan_page.pack_forget()
         self.generate_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
+        self.sidebar.set_active("generate")
         self._apply_screen_meta("generate")
 
     def show_scan_page(self):
         self.generate_page.pack_forget()
         self.scan_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
+        self.sidebar.set_active("scan")
         self._apply_screen_meta("scan")
 
     # ==================================================
