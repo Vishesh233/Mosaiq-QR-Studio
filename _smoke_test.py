@@ -265,9 +265,9 @@ def _run():
     from utils.clipboard import ClipboardManager
 
     def open_clipboard():
-        # Another program (clipboard history, sync) can hold the clipboard for a while.
+        # Windows clipboard history (a service, svchost) can hold the clipboard for several seconds.
         try:
-            ClipboardManager._open(attempts=100, pause=0.05)
+            ClipboardManager._open(attempts=600, pause=0.05)      # up to 30 s
         except Exception:
             import ctypes
             import win32gui
@@ -277,7 +277,7 @@ def _run():
             if holder:
                 who = (f"pid {win32process.GetWindowThreadProcessId(holder)[1]}, class "
                        f"{win32gui.GetClassName(holder)!r}, title {win32gui.GetWindowText(holder)!r}")
-            print(f"[smoke] clipboard stayed locked for 5 s; open by: {who or 'nobody we can see'}")
+            print(f"[smoke] clipboard stayed locked for 30 s; open by: {who or chr(110)+chr(111)+chr(98)+chr(111)+chr(100)+chr(121)}; this test is pid {os.getpid()}")
             raise
 
     def wait_for_clipboard():

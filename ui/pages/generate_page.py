@@ -4,7 +4,7 @@ from ui.components.content_card import ContentCard
 from ui.components.design_card import DesignCard
 from ui.components.preview_card import PreviewCard
 from ui.layout import CARD_GAP, TwoColumnPage
-from utils import filenames
+from utils import filenames, self_check
 from utils.qr_generator import QRGenerator
 from utils.clipboard import ClipboardManager
 from tkinter import messagebox
@@ -21,6 +21,9 @@ class GeneratePage(TwoColumnPage):
         self.generated_image = None
         self.generated_data = None          # the text behind generated_image
         self._refresh_job = None
+        self._checker = self_check.BackgroundCheck()
+        self._check_job = None
+        self._badge_type = ""
 
         # Left column (scrolls): step 1 and step 2
         self.content_card = ContentCard(self.left)
@@ -43,9 +46,17 @@ class GeneratePage(TwoColumnPage):
 
         # Changing a colour, shape or the logo updates a QR that is already showing.
         self.design_card.change_callback = self.on_design_changed
+        self.logo_card.limit_provider = self.current_logo_limit
 
     def current_style(self):
         return self.design_card.get_style()
+
+    def current_logo_limit(self):
+        """The safe logo size for what is typed now; None while the content is not valid."""
+        try:
+            return self.generator.logo_limit(self.content_card.get_content())
+        except ValueError:
+            return None
 
     def on_design_changed(self):
         """Redraw the preview with the new design (same text) shortly after the last change."""
@@ -65,6 +76,8 @@ class GeneratePage(TwoColumnPage):
             messagebox.showerror("QR Generation Failed", str(e))
 
     def _show(self, data):
+        # The logo may not be larger than is safe for this code; the slider follows.
+        self.logo_card.set_limit(self.generator.logo_limit(data))
         image = self.generator.generate(
             data=data,
             style=self.current_style(),
@@ -74,6 +87,36 @@ class GeneratePage(TwoColumnPage):
         self.generated_data = data
         self.preview_card.set_image(image)
         self.action_buttons.enable_export_buttons()
+        self._begin_test_scan(image, data)
+
+    # ------------------------------------------------------------------
+    # Test scan: the app reads its own QR back and says so next to the preview
+    # ------------------------------------------------------------------
+
+    BADGES = {
+        self_check.OK: ("ok", "✓  Scans correctly"),
+        self_check.FAIL: ("warn", "⚠  May not scan"),
+        self_check.UNAVAILABLE: ("info", "Test scan is not available on this PC"),
+        self_check.ERROR: ("info", "Test scan could not run"),
+    }
+
+    def _begin_test_scan(self, image, data):
+        self._badge_type = self.content_card.type_label()
+        self.preview_card.set_badge("Checking the code…", "info")
+        self._checker.start(image, data)
+        if self._check_job is None:
+            self._check_job = self.after(60, self._poll_test_scan)
+
+    def _poll_test_scan(self):
+        self._check_job = None
+        outcome = self._checker.poll()
+        if outcome is None:
+            self._check_job = self.after(60, self._poll_test_scan)
+            return
+        kind, text = self.BADGES[outcome]
+        if outcome == self_check.OK and self._badge_type:
+            text += f"  ·  {self._badge_type}"
+        self.preview_card.set_badge(text, kind)
 
     def generate_qr(self):
 
@@ -107,7 +150,11 @@ class GeneratePage(TwoColumnPage):
         # Reset colours, style and logo
         self.design_card.reset()
 
-        # Reset preview
+        # Reset preview (and forget a test scan still running)
+        self._checker.cancel()
+        if self._check_job is not None:
+            self.after_cancel(self._check_job)
+            self._check_job = None
         self.preview_card.clear_preview()
 
         # Remove generated image

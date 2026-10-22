@@ -73,6 +73,8 @@ class DesignCard(SectionCard):
         self._active = name
         self.tabs.set(name)
         self.panes[name].pack(fill="x")
+        if name == "Logo":
+            self.logo.refresh_limit()
 
     def apply_preset(self, name):
         """Set colours and style from a preset (the logo is kept); one preview refresh."""
@@ -88,7 +90,8 @@ class DesignCard(SectionCard):
 
     def get_style(self):
         """The QRStyle chosen in the tabs."""
-        base = QRStyle(fg=self.colours.get_qr_color(), bg=self.colours.get_bg_color())
+        base = QRStyle(fg=self.colours.get_qr_color(), bg=self.colours.get_bg_color(),
+                       logo_scale=self.logo.get_logo_scale())
         return self.style.apply_to(base)
 
     def reset(self):

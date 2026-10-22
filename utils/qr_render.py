@@ -25,6 +25,18 @@ MAX_LOGO_SCALE = 0.30
 LOGO_PAD = 0.10                   # clear space around the logo, as a fraction of its size
 
 
+# Largest safe logo size (fraction of the code width) by QR version, with error correction H.
+# Measured with the app's scanner and a solid dark logo (the worst case, 14 codes x 3 module
+# shapes per version): small codes (versions 1-3) first fail at 0.25 / 0.27 / 0.31, versions
+# 4 and up still decode at 0.41. The limits keep a clear margin below those points.
+LOGO_LIMITS = {1: 0.18, 2: 0.21, 3: 0.25}
+
+
+def max_logo_scale(version):
+    """The largest logo size that is safe for a QR of this ``version``."""
+    return LOGO_LIMITS.get(version, MAX_LOGO_SCALE)
+
+
 @dataclass(frozen=True)
 class QRStyle:
     module_shape: str = "square"

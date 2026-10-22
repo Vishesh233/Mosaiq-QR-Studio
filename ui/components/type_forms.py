@@ -99,6 +99,14 @@ class _Field(ctk.CTkFrame):
         else:
             self.widget.delete(0, "end")
 
+    def set(self, text):
+        """Replace the content with ``text``."""
+        self.clear()
+        if self.multiline:
+            self.widget.insert("1.0", text)
+        else:
+            self.widget.insert(0, text)
+
     def refresh_theme(self):
         theme = ThemeManager.get_theme()
         self.label.configure(text_color=theme["text_secondary"])
@@ -106,6 +114,9 @@ class _Field(ctk.CTkFrame):
 
 
 class _Form(ctk.CTkFrame):
+    # Saved-form key -> attribute holding that _Field. Used by the history to store a form and
+    # refill it later; every form lists all of its text fields.
+    KEYS = {}
 
     def __init__(self, parent):
         super().__init__(parent, fg_color="transparent")
@@ -129,6 +140,15 @@ class _Form(ctk.CTkFrame):
         for field in self.fields:
             field.clear()
 
+    def values(self):
+        """The text of every field, by key (for the history)."""
+        return {key: getattr(self, attr).get() for key, attr in self.KEYS.items()}
+
+    def fill(self, values):
+        """Put saved values back (keys that are missing are left empty)."""
+        for key, attr in self.KEYS.items():
+            getattr(self, attr).set(str(values.get(key, "")))
+
     def refresh_theme(self):
         for field in self.fields:
             field.refresh_theme()
@@ -138,6 +158,7 @@ class _Form(ctk.CTkFrame):
 
 
 class UrlForm(_Form):
+    KEYS = {"url": "entry_field"}
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -155,6 +176,7 @@ class UrlForm(_Form):
 
 
 class UpiForm(_Form):
+    KEYS = {"upi_id": "upi_id", "payee": "payee", "amount": "amount", "note": "note"}
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -171,6 +193,7 @@ class UpiForm(_Form):
 
 
 class WifiForm(_Form):
+    KEYS = {"ssid": "ssid", "password": "password"}
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -241,6 +264,24 @@ class WifiForm(_Form):
             bool(self.hidden.get())
         )
 
+    def values(self):
+        values = super().values()
+        values["security"] = self.security.get()
+        values["hidden"] = bool(self.hidden.get())
+        return values
+
+    def fill(self, values):
+        super().fill(values)
+        security = values.get("security", "WPA")
+        if security not in payloads.WIFI_SECURITY:
+            security = "WPA"
+        self.security.set(security)
+        self._security_changed(security)
+        if values.get("hidden"):
+            self.hidden.select()
+        else:
+            self.hidden.deselect()
+
     def clear(self):
         super().clear()
         self.hidden.deselect()
@@ -265,6 +306,7 @@ class WifiForm(_Form):
 
 
 class ContactForm(_Form):
+    KEYS = {"name": "name", "phone": "phone", "email": "email", "organisation": "organisation"}
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -281,6 +323,7 @@ class ContactForm(_Form):
 
 
 class EmailForm(_Form):
+    KEYS = {"to": "to", "subject": "subject", "body": "body"}
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -295,6 +338,7 @@ class EmailForm(_Form):
 
 
 class SmsForm(_Form):
+    KEYS = {"number": "number", "message": "message"}
 
     def __init__(self, parent):
         super().__init__(parent)

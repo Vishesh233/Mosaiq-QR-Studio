@@ -17,6 +17,13 @@ TYPE_TILES = (
 )
 
 
+# Short names for the "Scans correctly · ..." badge.
+TYPE_LABELS = {
+    "URL / Text": "URL / text", "UPI Payment": "UPI payment", "WiFi": "WiFi",
+    "Contact": "contact", "Email": "email", "SMS": "SMS",
+}
+
+
 class ContentCard(SectionCard):
     """Step 1: pick the QR type (icon tiles) and fill in its form."""
 
@@ -56,6 +63,21 @@ class ContentCard(SectionCard):
     def get_content(self):
         """Text to encode for the selected type. Raises ValueError (user message)."""
         return self.forms[self.active_type].payload()
+
+    def get_fields(self):
+        """The selected type's form values, by key (for the history)."""
+        return self.forms[self.active_type].values()
+
+    def load(self, type_name, values):
+        """Select ``type_name`` and fill its form with saved ``values``."""
+        if type_name not in self.forms:
+            raise ValueError(f"Unknown QR type: {type_name}")
+        self.set_type(type_name)
+        self.forms[type_name].fill(values)
+
+    def type_label(self):
+        """The selected type as shown in the test-scan badge, e.g. "UPI payment"."""
+        return TYPE_LABELS.get(self.active_type, self.active_type)
 
     def default_filename_stem(self):
         """Suggested name for the Save dialog, from the selected type (e.g. 'upi_qr')."""

@@ -8,6 +8,7 @@ import tempfile
 import time
 
 os.environ.setdefault("PYTHONUTF8", "1")
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 os.environ["QRSTUDIO_NO_SPLASH"] = "1"
 os.environ["APPDATA"] = tempfile.mkdtemp()
 
@@ -94,6 +95,63 @@ def test_presets():
           qr_presets.matching(qr_presets.get("Ocean").style.with_(logo_scale=0.1)) == "Ocean")
 
 
+def test_background_check():
+    from PIL import Image
+    from utils import self_check
+    from utils.qr_generator import QRGenerator
+    from utils.qr_render import QRStyle
+
+    generator = QRGenerator()
+    good = generator.generate("https://example.com/check")
+    blank = Image.new("RGB", (300, 300), "white")
+    check("good code passes", self_check.check_image(good, "https://example.com/check") == self_check.OK)
+    check("wrong text fails", self_check.check_image(good, "something else") == self_check.FAIL)
+    check("blank image fails", self_check.check_image(blank, "x") == self_check.FAIL)
+    pale = generator.generate("https://example.com/check", style=QRStyle(fg="#F8F8F8"))
+    check("near-white on white fails", self_check.check_image(pale, "https://example.com/check")
+          == self_check.FAIL)
+
+    # only the newest request is reported
+    runner = self_check.BackgroundCheck()
+    runner.start(blank, "x")
+    runner.start(good, "https://example.com/check")
+    outcome = None
+    end = time.time() + 15
+    while outcome is None and time.time() < end:
+        outcome = runner.poll()
+        time.sleep(0.02)
+    check("newest request wins", outcome == self_check.OK, repr(outcome))
+    time.sleep(0.5)
+    check("stale results are dropped", runner.poll() is None)
+    runner.start(good, "https://example.com/check")
+    runner.cancel()
+    time.sleep(1.5)
+    check("cancelled request reports nothing", runner.poll() is None)
+
+    # OpenCV missing / crashing: reported, never raised
+    original = self_check.QRScanner.decode_image
+    from utils.scan_errors import ScannerUnavailable
+
+    def unavailable(*a, **k):
+        raise ScannerUnavailable("no cv2")
+
+    def crash(*a, **k):
+        raise RuntimeError("boom")
+
+    try:
+        self_check.QRScanner.decode_image = staticmethod(unavailable)
+        check("unavailable reported", self_check.check_image(good, "x") == self_check.UNAVAILABLE)
+        self_check.QRScanner.decode_image = staticmethod(crash)
+        check("crash reported, not raised", self_check.check_image(good, "x") == self_check.ERROR)
+        from utils import app_log
+        for handler in app_log.get_logger().handlers:
+            handler.flush()
+        log = open(app_log.log_path(), encoding="utf-8").read()
+        check("crash written to the error log", "Test scan crashed" in log and "boom" in log)
+    finally:
+        self_check.QRScanner.decode_image = original
+
+
 def test_ui():
     from ui.app import QRCodeStudioApp
     from utils import qr_checks, qr_presets
@@ -177,6 +235,111 @@ def test_ui():
     card.colours.set_colors(qr="#FFFFFF", bg="#000000")
     check("light on dark advice", qr_checks.INVERTED_TEXT in card.hint.cget("text"))
 
+    # ---- test-scan badge ----
+    def badge():
+        return gp.preview_card.badge.cget("text")
+
+    def wait_badge(seconds=15):
+        end = time.time() + seconds
+        while time.time() < end:
+            root.update()
+            if not badge().startswith("Checking"):
+                return badge()
+            time.sleep(0.02)
+        return badge()
+
+    gp.clear_form()
+    check("no badge before a QR exists", not gp.preview_card.badge.winfo_manager())
+    gp.content_card.url_entry.insert(0, "https://example.com/badge")
+    gp.generate_qr()
+    check("badge says it is checking", badge().startswith("Checking"), badge())
+    text = wait_badge()
+    check("good code: scans correctly", "Scans correctly" in text and "URL / text" in text, text)
+    check("good badge is green", gp.preview_card.badge.cget("text_color") ==
+          ThemeManager.get_theme()["success"])
+    card.colours.set_colors(qr="#F8F8F8", bg="#FFFFFF")          # live redraw -> new test scan
+    time.sleep(0.2)
+    text = wait_badge()
+    check("pale code: may not scan", "May not scan" in text, text)
+    check("warning badge is amber", gp.preview_card.badge.cget("text_color") ==
+          ThemeManager.get_theme()["warning"])
+    check("Generate and Save still allowed with the warning",
+          str(gp.action_buttons.save_btn.cget("state")) == "normal")
+    card.colours.set_colors(qr="#000000")
+    time.sleep(0.2)
+    check("fixed colours: scans correctly again", "Scans correctly" in wait_badge())
+    gp.content_card.set_type("UPI Payment")
+    form = gp.content_card.forms["UPI Payment"]
+    for fld, val in ((form.upi_id, "shop@okaxis"), (form.payee, "Corner Shop")):
+        fld.widget.insert(0, val)
+    gp.generate_qr()
+    check("badge names the type", "UPI payment" in wait_badge(), badge())
+
+    # the window keeps answering while the test scan runs on its thread
+    big = "https://example.com/" + "long/" * 120
+    gp.content_card.set_type("URL / Text")
+    gp.content_card.url_entry.delete(0, "end")
+    gp.content_card.url_entry.insert(0, big)
+    gp.generate_qr()
+    worst, last = 0.0, time.time()
+    end = time.time() + 6
+    while time.time() < end and badge().startswith("Checking"):
+        root.update()
+        now = time.time()
+        worst, last = max(worst, now - last), now
+        time.sleep(0.005)
+    check("UI not frozen by the test scan", worst < 0.35, f"worst gap {worst:.2f}s")
+
+    gp.clear_form()
+    check("Clear removes the badge", not gp.preview_card.badge.winfo_manager())
+    gp.content_card.clear()
+
+    # ---- logo size slider ----
+    import tempfile as _tmp
+    from PIL import Image
+    logo_file = os.path.join(_tmp.mkdtemp(), "logo.png")
+    Image.new("RGBA", (120, 120), (200, 30, 60, 255)).save(logo_file)
+    logo = card.logo
+    check("slider disabled without a logo", str(logo.size_slider.cget("state")) == "disabled")
+    gp.content_card.set_type("URL / Text")
+    gp.content_card.url_entry.insert(0, "a")                        # a version 1 code: smallest limit
+    card.show_tab("Logo")
+    root.update()
+    check("limit follows the typed content (small code)",
+          "Safe up to 18%" in logo.limit_label.cget("text"), logo.limit_label.cget("text"))
+    logo.set_logo(logo_file)
+    root.update()
+    check("slider enabled with a logo", str(logo.size_slider.cget("state")) == "normal")
+    check("default size inside the limit", logo.get_logo_scale() <= 0.18 + 1e-9, str(logo.get_logo_scale()))
+    logo._slid(100)                                                  # far beyond the track
+    check("size cannot pass the limit", logo.get_logo_scale() <= 0.18 + 1e-9, str(logo.get_logo_scale()))
+    check("label shows the size", f"{int(round(logo.get_logo_scale() * 100))}%" in logo.size_label.cget("text"))
+    gp.generate_qr()
+    check("small code with logo scans", "Scans correctly" in wait_badge(), badge())
+    gp.content_card.url_entry.delete(0, "end")
+    gp.content_card.url_entry.insert(0, "https://example.com/a/much/longer/address/for/a/bigger/code/" * 2)
+    logo.refresh_limit()
+    check("limit grows with a bigger code", "Safe up to 30%" in logo.limit_label.cget("text"),
+          logo.limit_label.cget("text"))
+    logo._slid(30)
+    check("larger size allowed on a bigger code", abs(logo.get_logo_scale() - 0.30) < 1e-9)
+    gp.generate_qr()
+    check("bigger code with the largest logo scans", "Scans correctly" in wait_badge(), badge())
+    drawn = gp.generated_image
+    # content shrinks to a tiny code: the size snaps down instead of exceeding the limit
+    gp.content_card.url_entry.delete(0, "end")
+    gp.content_card.url_entry.insert(0, "a")
+    gp.generate_qr()
+    check("size snaps to the new limit", logo.get_logo_scale() <= 0.18 + 1e-9
+          and "Safe up to 18%" in logo.limit_label.cget("text"))
+    check("the slider moved with it", abs(logo.size_slider.get() - logo.get_logo_scale() * 100) < 0.6)
+    check("tiny code with logo still scans", "Scans correctly" in wait_badge(), badge())
+    logo.reset_logo()
+    check("removing the logo disables the slider", str(logo.size_slider.cget("state")) == "disabled")
+    gp.clear_form()
+    gp.content_card.clear()
+    gp.content_card.url_entry.insert(0, "https://example.com/layout")
+
     # Clear resets look and hint
     gp.clear_form()
     check("Clear restores Classic and good contrast",
@@ -195,13 +358,14 @@ def test_ui():
 def main():
     test_contrast_rules()
     test_presets()
+    test_background_check()
     test_ui()
     if problems:
         print("DESIGN_FEATURES_FAIL")
         for p in problems:
             print(" -", p)
         sys.exit(1)
-    print("DESIGN_FEATURES_OK: contrast rules, presets (scan + contrast), preset UI, warning never blocks")
+    print("DESIGN_FEATURES_OK: contrast rules, presets, test-scan badge (background thread), logo size limits, warning never blocks")
 
 
 if __name__ == "__main__":

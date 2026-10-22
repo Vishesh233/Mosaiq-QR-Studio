@@ -20,7 +20,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 DESKTOP = {"_camera_test.py", "_region_test.py", "_dnd_test.py"}
 RETRY = {"_dnd_test.py"}
-SLOW_TIMEOUT = 600
+SLOW_TIMEOUT = 420
 
 
 def _kill_group(job):

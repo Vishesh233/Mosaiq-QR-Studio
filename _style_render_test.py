@@ -211,6 +211,59 @@ def test_logo():
         pass
 
 
+def test_logo_limits_hold():
+    """At the largest allowed logo (worst case: solid dark, opaque) every code still scans,
+    and the generator never draws a bigger logo than the limit, whatever is asked for."""
+    import random
+    from PIL import Image, ImageChops
+    from utils import qr_render
+    from utils.qr_generator import QRGenerator
+    from utils.qr_render import QRStyle, max_logo_scale, MAX_LOGO_SCALE
+    from utils.qr_scanner import QRScanner
+
+    generator = QRGenerator()
+    random.seed(7)
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGH0123456789"
+    lengths = {1: (1, 7), 2: (8, 14), 3: (15, 24), 4: (25, 34), 5: (35, 44), 6: (45, 58),
+               8: (70, 84), 10: (100, 120), 14: (190, 220), 20: (300, 350)}
+    logo = Image.new("RGBA", (100, 100), (25, 25, 25, 255))
+    seen_versions = set()
+    for _, (low, high) in lengths.items():
+        for _ in range(8):
+            text = "".join(random.choice(alphabet) for _ in range(random.randint(low, high)))
+            matrix, version = generator.matrix(text)
+            seen_versions.add(version)
+            limit = max_logo_scale(version)
+            check(f"limit is positive and at most the maximum (v{version})",
+                  0.1 <= limit <= MAX_LOGO_SCALE)
+            for shape in ("square", "dots", "rounded"):
+                style = QRStyle(module_shape=shape)
+                object.__setattr__(style, "logo_scale", limit)       # exactly at the limit
+                image = qr_render.render(matrix, style, 10, 4, logo=logo).convert("RGB")
+                got = QRScanner.decode_image(image, thorough=False)
+                check(f"v{version} {shape}: scans with the largest allowed logo", got == text,
+                      f"limit {limit}")
+    check("small versions are covered", {1, 2, 3} <= seen_versions, str(sorted(seen_versions)))
+    check("limits grow with the version", max_logo_scale(1) <= max_logo_scale(2)
+          <= max_logo_scale(3) <= max_logo_scale(4) == MAX_LOGO_SCALE)
+
+    # asking for more than the limit gives exactly the limit
+    tiny = "a"
+    _, version = generator.matrix(tiny)
+    limit = max_logo_scale(version)
+    greedy = generator.generate(tiny, style=QRStyle(logo_scale=0.30), logo_path=_logo_file(logo))
+    exact = generator.generate(tiny, style=QRStyle(logo_scale=limit), logo_path=_logo_file(logo))
+    check("generator clamps an oversized logo", ImageChops.difference(
+        greedy.convert("RGB"), exact.convert("RGB")).getbbox() is None)
+    check("generator reports the limit", generator.logo_limit(tiny) == limit)
+
+
+def _logo_file(image):
+    path = os.path.join(tempfile.mkdtemp(), "limit_logo.png")
+    image.save(path)
+    return path
+
+
 def test_style_data():
     from utils.qr_render import QRStyle
 
@@ -259,6 +312,7 @@ def main():
     test_modules_sit_where_the_matrix_says()
     test_colours_and_gradients()
     test_logo()
+    test_logo_limits_hold()
     test_sizes_and_errors()
     test_every_style_scans()
     if problems:

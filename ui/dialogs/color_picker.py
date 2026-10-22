@@ -4,6 +4,7 @@ recent colours and presets. Replaces the old Windows colour dialog.
     colour = pick_color(parent, initial="#000000", title="QR colour")   # "#RRGGBB" or None
 """
 import colorsys
+import time
 import tkinter
 
 import customtkinter as ctk
@@ -12,6 +13,7 @@ from PIL import Image, ImageTk
 
 from ui.brand_logo import apply_window_icon
 from utils import colors
+from utils.app_log import get_logger
 from utils.theme_manager import ThemeManager
 
 SV_WIDTH, SV_HEIGHT, HUE_HEIGHT = 376, 188, 16
@@ -46,12 +48,25 @@ class ColorPickerDialog(ctk.CTkToplevel):
 
         self.update_idletasks()
         self._center_on(parent.winfo_toplevel())
-        self.wait_visibility()          # grab_set needs a mapped window
-        self.grab_set()
+        self._grab_when_visible()
         self.bind("<Escape>", lambda _e: self.cancel())
         self.bind("<Return>", lambda _e: self.apply())
 
     # ======================================================
+
+    def _grab_when_visible(self):
+        """Make the dialog modal once it is on screen (grab_set needs a viewable window).
+
+        Waits at most two seconds: a dialog that never appears must not hang the app.
+        """
+        deadline = time.time() + 2.0
+        while not self.winfo_viewable() and time.time() < deadline:
+            self.update()
+            time.sleep(0.02)
+        if self.winfo_viewable():
+            self.grab_set()
+        else:
+            get_logger().warning("Colour picker did not become visible; opened without a grab")
 
     def _center_on(self, window):
         width, height = self.winfo_reqwidth(), self.winfo_reqheight()

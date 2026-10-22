@@ -59,6 +59,13 @@ class QRGenerator:
 
     # =====================================================
 
+    def logo_limit(self, data: str):
+        """The largest safe logo size (fraction of the code width) for ``data``."""
+        _matrix, version = self.matrix(data)
+        return qr_render.max_logo_scale(version)
+
+    # =====================================================
+
     def generate(
         self,
         data: str,
@@ -90,7 +97,12 @@ class QRGenerator:
         """
 
         style = style or QRStyle(fg=qr_color, bg=bg_color)
-        matrix, _version = self.matrix(data)
+        matrix, version = self.matrix(data)
+
+        # Never larger than is safe for this code, whatever the caller asked for.
+        safe = qr_render.max_logo_scale(version)
+        if style.logo_scale > safe:
+            style = style.with_(logo_scale=safe)
 
         logo = Image.open(logo_path) if logo_path else None
         try:

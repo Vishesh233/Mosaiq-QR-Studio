@@ -13,12 +13,15 @@ import sys
 from config import SETTINGS_DIR_NAME
 
 
-def _settings_path():
+def folder():
+    """The per-user folder that holds the settings (and the history)."""
     if sys.platform.startswith("win") and os.environ.get("APPDATA"):
-        folder = os.path.join(os.environ["APPDATA"], SETTINGS_DIR_NAME)
-    else:
-        folder = os.path.join(os.path.expanduser("~"), ".qr_code_studio")
-    return os.path.join(folder, "settings.json")
+        return os.path.join(os.environ["APPDATA"], SETTINGS_DIR_NAME)
+    return os.path.join(os.path.expanduser("~"), ".qr_code_studio")
+
+
+def _settings_path():
+    return os.path.join(folder(), "settings.json")
 
 
 _cache = None

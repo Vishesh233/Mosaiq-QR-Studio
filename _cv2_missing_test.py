@@ -67,9 +67,16 @@ def worker(mode, log_dir):
     check("app starts", root.winfo_exists() == 1)
     check("cv2 is not loaded at start-up", "cv2" not in sys.modules)
 
-    # --- Generate never needs OpenCV ---
+    # --- Neither start-up nor opening the pages needs OpenCV ---
     gp = app.generate_page
+    app.show_scan_page()
+    root.update_idletasks()
+    check("opening the Scan page did not load cv2", "cv2" not in sys.modules)
     app.show_generate_page()
+    root.update_idletasks()
+    check("opening the Generate page did not load cv2", "cv2" not in sys.modules)
+
+    # --- Generate works without OpenCV; only the background test scan wants it ---
     cc = gp.content_card
     cc.set_type("UPI Payment")
     form = cc.forms["UPI Payment"]
@@ -79,17 +86,30 @@ def worker(mode, log_dir):
     gp.generate_qr()
     root.update_idletasks()
     check("Generate works", gp.generated_image is not None)
-    check("Generate did not load cv2", "cv2" not in sys.modules)
+    check("Generate itself did not wait for cv2 (it loads on the test-scan thread)",
+          gp.preview_card.badge.cget("text").startswith("Checking"), gp.preview_card.badge.cget("text"))
+
+    import time
+    deadline = time.time() + 20
+    while time.time() < deadline and gp.preview_card.badge.cget("text").startswith("Checking"):
+        root.update()
+        time.sleep(0.02)
+    badge = gp.preview_card.badge.cget("text")
+    if mode == "lazy":
+        check("test scan loaded cv2 and passed", "cv2" in sys.modules and "Scans correctly" in badge, badge)
+    else:
+        check("badge says the test scan is not available", badge == "Test scan is not available on this PC", badge)
+        check("test scan did not load cv2", "cv2" not in sys.modules)
+    check("preview and buttons still usable", str(gp.action_buttons.save_btn.cget("state")) == "normal")
     app.show_scan_page()
     root.update_idletasks()
-    check("opening the Scan page did not load cv2", "cv2" not in sys.modules)
 
     sp = app.scan_page
     rc = sp.result_card
 
     if mode == "lazy":
         sp.on_image_selected(path)
-        check("first scan loads cv2", "cv2" in sys.modules)
+        check("scanning works", "cv2" in sys.modules)
         check("first scan decodes", rc.result == text, repr(rc.result))
     else:
         expected = MEDIA_PACK if mode == "dllfail" else None
