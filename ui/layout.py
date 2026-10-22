@@ -18,6 +18,39 @@ CARD_RADIUS = 14
 RIGHT_COLUMN_WIDTH = 46 * GRID  # 368
 
 
+def autohide_scrollbar(scrollable):
+    """Show a CTkScrollableFrame's scrollbar only while its content overflows."""
+
+    def update(_event=None):
+        try:
+            canvas, bar = scrollable._parent_canvas, scrollable._scrollbar
+            overflow = scrollable.winfo_reqheight() > canvas.winfo_height() + 1
+            shown = bool(bar.winfo_manager())
+            if overflow and not shown:
+                bar.grid()
+            elif not overflow and shown:
+                bar.grid_remove()
+        except Exception:      # the widget is being destroyed
+            pass
+
+    def schedule(_event=None):
+        scrollable.after_idle(update)
+
+    scrollable.bind("<Configure>", schedule, add="+")
+    scrollable._parent_canvas.bind("<Configure>", schedule, add="+")
+
+
+def restyle_scrollable(scrollable, label_bg):
+    """Re-apply the theme to a CTkScrollableFrame (its inner canvas needs a nudge too)."""
+    theme = ThemeManager.get_theme()
+    scrollable.configure(
+        fg_color="transparent",
+        scrollbar_button_color=theme["scrollbar"],
+        scrollbar_button_hover_color=theme["scrollbar_hover"],
+        label_text_color=theme["text"], label_fg_color=theme[label_bg],
+    )
+
+
 class Card(ctk.CTkFrame):
     """A rounded, bordered surface."""
 
@@ -104,6 +137,7 @@ class TwoColumnPage(ctk.CTkFrame):
         )
         self.left.grid(row=0, column=0, sticky="nsew",
                        padx=(PAGE_PADX, COLUMN_GAP - GRID), pady=(0, PAGE_PADY))
+        autohide_scrollbar(self.left)
 
         self.right = ctk.CTkFrame(self, width=RIGHT_COLUMN_WIDTH, fg_color="transparent")
         self.right.grid(row=0, column=1, sticky="ns", padx=(0, PAGE_PADX), pady=(0, PAGE_PADY))
@@ -111,9 +145,4 @@ class TwoColumnPage(ctk.CTkFrame):
         self.right.pack_propagate(False)
 
     def refresh_theme(self):
-        theme = ThemeManager.get_theme()
-        self.left.configure(
-            scrollbar_button_color=theme["scrollbar"],
-            scrollbar_button_hover_color=theme["scrollbar_hover"],
-            label_text_color=theme["text"], label_fg_color=theme["background"],
-        )
+        restyle_scrollable(self.left, "background")

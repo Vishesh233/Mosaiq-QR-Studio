@@ -159,12 +159,14 @@ def _run():
         root.update_idletasks()
         root.update()
         card_bottom = rc.winfo_rooty() + rc.winfo_height()
-        tips_bottom = rc.tips_frame.winfo_rooty() + rc.tips_frame.winfo_height()
-        if tips_bottom > card_bottom:
-            problems.append(f"{label}: TIPS card is cut off ({tips_bottom - card_bottom}px past the card)")
         for button in (rc.copy_btn, rc.action_btn):
             if button.winfo_ismapped() and button.winfo_rooty() + button.winfo_height() > card_bottom:
                 problems.append(f"{label}: a button is cut off")
+        # The buttons are pinned under the scrolling content: it must never cover them.
+        visible = rc.scroll._parent_frame      # (rc.scroll itself is the full-length inner frame)
+        scroll_bottom = visible.winfo_rooty() + visible.winfo_height()
+        if scroll_bottom > rc.buttons.winfo_rooty():
+            problems.append(f"{label}: result content overlaps the buttons")
 
     def expect(label, text, primary, secondary, *, opens=None, primary_copies=None, secondary_copies=None):
         rc.set_result(text)
@@ -211,11 +213,10 @@ def _run():
     try:
         upi = qr_payloads.build_upi("shop@okaxis", "Corner Shop", "99.50", "Order")
         expect("UPI", upi, "Copy UPI ID", "Copy raw text", primary_copies="shop@okaxis", secondary_copies=upi)
-        label = rc.result_label.cget("text")
+        label = rc.shown_text()
         if "Corner Shop" not in label or "shop@okaxis" not in label or "INR 99.50" not in label:
             problems.append(f"UPI result not readable: {label!r}")
         rc.result_label.event_generate("<Button-1>")
-        rc.icon.event_generate("<Button-1>")
         root.update_idletasks()
         if opened:
             problems.append(f"UPI result tried to open something when clicked: {opened!r}")
@@ -263,8 +264,12 @@ def _run():
     import win32clipboard
     from utils.clipboard import ClipboardManager
 
+    def open_clipboard():
+        # Another program (clipboard history, sync) can hold the clipboard for a while.
+        ClipboardManager._open(attempts=100, pause=0.05)
+
     def set_clipboard_text(text):
-        ClipboardManager._open()
+        open_clipboard()
         try:
             win32clipboard.EmptyClipboard()
             win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
@@ -272,7 +277,7 @@ def _run():
             win32clipboard.CloseClipboard()
 
     def empty_clipboard():
-        ClipboardManager._open()
+        open_clipboard()
         try:
             win32clipboard.EmptyClipboard()
         finally:

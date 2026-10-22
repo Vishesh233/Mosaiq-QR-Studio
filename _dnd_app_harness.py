@@ -59,6 +59,7 @@ def snapshot():
         "has_content": uc.has_content,
         "image_path": uc.image_path,
         "subtitle": uc.subtitle.cget("text"),
+        "title": uc.title_label.cget("text"),
         "camera_running": sp.camera is not None,
         "camera_released": FakeCamera.released,
         "upload_rect": rect(uc.camera_frame if uc.camera_visible else uc.upload_frame),

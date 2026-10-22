@@ -6,28 +6,27 @@ from PIL import Image
 
 from utils.theme_manager import ThemeManager
 from ui import icons
+from ui.layout import CARD_PAD, Card
+from ui.line_icons import line_icon
+from ui.widgets import DashedZone, IconTile
 
-class ScanUploadCard(ctk.CTkFrame):
+ZONE_HEIGHT = 320
+TIPS = ("Use a sharp image", "Good contrast helps", "Avoid cropped codes")
+
+
+class ScanUploadCard(Card):
+    """Source tiles (Image, Camera, Screen region, Paste), a big drop zone and a tips line."""
 
     def __init__(self, parent):
-        theme = ThemeManager.get_theme()
-
-        super().__init__(
-            parent,
-            corner_radius=16,
-            border_width=1,
-            fg_color=theme["card"],
-            border_color=theme["border"],
-            width=760,
-            height=560
-        )
+        super().__init__(parent)
 
         self.image_path = None
         self.has_content = False
         self.preview_image = None
         self.preview_label = None
         self.upload_callback = None
-        self.idle_subtitle = "Click to browse"
+        self.idle_title = "Select a QR image"
+        self.idle_subtitle = "Click to browse your files"
 
         self.build_ui()
 
@@ -36,196 +35,97 @@ class ScanUploadCard(ctk.CTkFrame):
     def build_ui(self):
         theme = ThemeManager.get_theme()
 
-        # ---------------- Header ---------------- #
+        # ---------------- Source tiles ---------------- #
 
-        self.header = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
+        self.tiles = ctk.CTkFrame(self, fg_color="transparent")
+        self.tiles.pack(fill="x", padx=CARD_PAD, pady=(CARD_PAD, 14))
+        self.tiles.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="sources")
 
-        self.header.pack(
-            fill="x",
-            padx=20,
-            pady=(18, 10)
-        )
+        self.image_button = IconTile(self.tiles, "image", "Image", height=64,
+                                     command=self.choose_image)
+        self.camera_button = IconTile(self.tiles, "camera", "Camera", height=64)
+        self.region_button = IconTile(self.tiles, "screen", "Screen region", height=64)
+        self.paste_button = IconTile(self.tiles, "paste", "Paste · Ctrl+V", height=64)
+        for column, tile in enumerate((self.image_button, self.camera_button,
+                                       self.region_button, self.paste_button)):
+            tile.grid(row=0, column=column, sticky="ew",
+                      padx=(0 if column == 0 else 5, 0 if column == 3 else 5))
+        self.image_button.set_selected(True)
 
-        self.title = ctk.CTkLabel(
-            self.header,
-            text="Scan Image",
-            font=("Segoe UI Semibold", 16),
-            text_color=theme["text"]
-        )
+        # ---------------- Drop zone ---------------- #
 
-        self.title.pack(side="left")
+        self.upload_frame = DashedZone(self, height=ZONE_HEIGHT)
+        self.upload_frame.pack(fill="x", padx=CARD_PAD)
+        self.upload_frame.bind_click(self.choose_image)
 
-        self.paste_button = ctk.CTkButton(
-            self.header,
-            text=f"{icons.icon('copy')}  Paste",
-            width=110,
-            height=34,
-            corner_radius=10,
-            border_width=1,
-            fg_color="transparent",
-            hover_color=theme["card_hover"],
-            border_color=theme["border"],
-            text_color=theme["text"],
-            font=("Segoe UI", 12)
-        )
+        self.placeholder = self.upload_frame.inner
 
-        self.paste_button.pack(side="right")
-
-        self.region_button = ctk.CTkButton(
-            self.header,
-            text=f"{icons.icon('screen')}  Screen Region",
-            width=150,
-            height=34,
-            corner_radius=10,
-            border_width=1,
-            fg_color="transparent",
-            hover_color=theme["card_hover"],
-            border_color=theme["border"],
-            text_color=theme["text"],
-            font=("Segoe UI", 12)
-        )
-
-        self.region_button.pack(side="right", padx=(0, 8))
-
-        self.camera_button = ctk.CTkButton(
-            self.header,
-            text=f"{icons.icon('scan')}  Use Camera",
-            width=140,
-            height=34,
-            corner_radius=10,
-            border_width=1,
-            fg_color="transparent",
-            hover_color=theme["card_hover"],
-            border_color=theme["border"],
-            text_color=theme["text"],
-            font=("Segoe UI", 12)
-        )
-
-        self.camera_button.pack(side="right", padx=(0, 8))
-
-        # ---------------- Upload Area ---------------- #
-
-        self.upload_frame = ctk.CTkFrame(
-            self,
-            height=390,
-            width=690,
-            corner_radius=16,
-            border_width=1,
-            fg_color=theme["entry"],
-            border_color=theme["primary"]
-        )
-
-        self.upload_frame.pack(
-            fill="x",
-            padx=20,
-            pady=(0, 20)
-        )
-
-        self.upload_frame.pack_propagate(False)
-
-        self.upload_frame.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
-
-        # Placeholder
-
-        self.placeholder = ctk.CTkFrame(
-            self.upload_frame,
-            fg_color="transparent"
-        )
-
-        self.placeholder.place(
-            relx=0.5,
-            rely=0.5,
-            anchor="center"
-        )
-
-        self.placeholder.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
-
-        self.icon = ctk.CTkLabel(
-            self.placeholder,
-            text=icons.icon("image"),
-            font=icons.icon_font(52),
-            text_color=theme["primary"]
-        )
-
-        self.icon.pack(
-            pady=(15, 10)
-        )
-
-        self.icon.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
+        self.icon = ctk.CTkLabel(self.placeholder, text="", text_color=theme["text"],
+                                 image=self._upload_icon())
+        self.icon.pack(pady=(0, 8))
 
         self.title_label = ctk.CTkLabel(
             self.placeholder,
-            text="Select your QR Image",
+            text=self.idle_title,
             font=("Segoe UI Semibold", 18),
             text_color=theme["text"]
         )
-
         self.title_label.pack()
-
-        self.title_label.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
 
         self.subtitle = ctk.CTkLabel(
             self.placeholder,
             text=self.idle_subtitle,
-            font=("Segoe UI", 12),
+            font=("Segoe UI", 13),
             text_color=theme["text_secondary"]
         )
-
-        self.subtitle.pack(
-            pady=(5, 15)
-        )
-
-        self.subtitle.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
+        self.subtitle.pack(pady=(4, 14))
 
         self.browse_button = ctk.CTkButton(
             self.placeholder,
             text="Browse Image",
-            width=170,
-            height=42,
-            corner_radius=12,
+            height=40,
+            width=160,
+            corner_radius=11,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             text_color=theme["on_primary"],
+            font=("Segoe UI Semibold", 13),
             command=self.choose_image
         )
-
-        self.browse_button.pack(
-            pady=(10, 0)
-        )
+        self.browse_button.pack()
 
         self.supported_label = ctk.CTkLabel(
             self.placeholder,
-            text="PNG • JPG • JPEG • WEBP • BMP",
-            font=("Segoe UI", 11),
+            text="PNG · JPG · JPEG · WEBP · BMP",
+            font=("Segoe UI", 12),
             text_color=theme["text_secondary"]
         )
+        self.supported_label.pack(pady=(14, 0))
 
-        self.supported_label.pack(
-            pady=(15, 0)
-        )
+        for widget in (self.icon, self.title_label, self.subtitle, self.supported_label):
+            widget.bind("<Button-1>", lambda _e: self.choose_image())
+
+        # ---------------- Tips ---------------- #
+
+        self.tips = ctk.CTkFrame(self, fg_color="transparent")
+        self.tips.pack(fill="x", padx=CARD_PAD, pady=(12, CARD_PAD))
+        self.tip_labels = []
+        for tip in TIPS:
+            label = ctk.CTkLabel(
+                self.tips, text=f"•  {tip}", font=("Segoe UI", 12),
+                text_color=theme["text_secondary"])
+            label.pack(side="left", padx=(0, 18))
+            self.tip_labels.append(label)
 
         self.build_camera_view()
 
+    def _upload_icon(self):
+        # Kept on self: a label raises TclError if its CTkImage is garbage-collected.
+        self._upload_icon_ref = line_icon("upload", ThemeManager.get_theme()["primary"], 48)
+        return self._upload_icon_ref
+
     # ======================================================
-    # Camera view (replaces the upload area while the camera runs)
+    # Camera view (replaces the drop zone while the camera runs)
     # ======================================================
 
     def build_camera_view(self):
@@ -233,11 +133,10 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.camera_frame = ctk.CTkFrame(
             self,
-            height=390,
-            width=690,
-            corner_radius=16,
+            height=ZONE_HEIGHT,
+            corner_radius=14,
             border_width=1,
-            fg_color=theme["entry"],
+            fg_color=theme["segment_bg"],
             border_color=theme["primary"]
         )
 
@@ -262,9 +161,9 @@ class ScanUploadCard(ctk.CTkFrame):
         self.camera_stop_button = ctk.CTkButton(
             self.camera_buttons,
             text="Stop Camera",
-            width=170,
-            height=42,
-            corner_radius=12,
+            width=150,
+            height=40,
+            corner_radius=11,
             fg_color="transparent",
             border_width=1,
             hover_color=theme["card_hover"],
@@ -278,8 +177,8 @@ class ScanUploadCard(ctk.CTkFrame):
             self.camera_buttons,
             text="Open Camera Settings",
             width=190,
-            height=42,
-            corner_radius=12,
+            height=40,
+            corner_radius=11,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             text_color=theme["on_primary"]
@@ -289,12 +188,14 @@ class ScanUploadCard(ctk.CTkFrame):
         self.camera_visible = False
 
     def show_camera_view(self, status):
-        """Swap the upload area for the live camera area."""
+        """Swap the drop zone for the live camera area."""
 
         self.clear()
 
         self.upload_frame.pack_forget()
         self.camera_visible = True
+        self.image_button.set_selected(False)
+        self.camera_button.set_selected(True)
 
         # A fresh label each time: a CTkLabel keeps a reference to its last
         # CTkImage and raises TclError if that image was freed meanwhile.
@@ -304,7 +205,8 @@ class ScanUploadCard(ctk.CTkFrame):
         self.camera_label = ctk.CTkLabel(
             self.camera_frame,
             text="",
-            fg_color="transparent"
+            fg_color="transparent",
+            text_color=ThemeManager.get_color("text"),
         )
 
         self.camera_buttons.pack(side="bottom", pady=(0, 16))
@@ -314,10 +216,9 @@ class ScanUploadCard(ctk.CTkFrame):
         self.camera_stop_button.configure(text="Stop Camera")
 
         self.camera_frame.pack(
-            after=self.header,
+            after=self.tiles,
             fill="x",
-            padx=20,
-            pady=(0, 20)
+            padx=CARD_PAD,
         )
 
         self.camera_image = None
@@ -337,7 +238,7 @@ class ScanUploadCard(ctk.CTkFrame):
             return
 
         frame = Image.fromarray(rgb)
-        frame.thumbnail((440, 250))
+        frame.thumbnail((440, 230))
 
         self.camera_image = ctk.CTkImage(
             light_image=frame,
@@ -364,6 +265,8 @@ class ScanUploadCard(ctk.CTkFrame):
             return
 
         self.camera_visible = False
+        self.camera_button.set_selected(False)
+        self.image_button.set_selected(True)
         self.camera_frame.pack_forget()
         if self.camera_label is not None:
             self.camera_label.destroy()
@@ -371,10 +274,9 @@ class ScanUploadCard(ctk.CTkFrame):
         self.camera_status.pack_forget()
         self.camera_buttons.pack_forget()
         self.upload_frame.pack(
-            after=self.header,
+            after=self.tiles,
             fill="x",
-            padx=20,
-            pady=(0, 20)
+            padx=CARD_PAD,
         )
 
     # ======================================================
@@ -408,12 +310,15 @@ class ScanUploadCard(ctk.CTkFrame):
     def set_drop_hint(self, enabled):
         """Mention drag & drop in the idle text when it is available."""
 
-        self.idle_subtitle = (
-            "Click to browse, or drop an image here" if enabled
-            else "Click to browse"
-        )
+        if enabled:
+            self.idle_title = "Drop a QR image here"
+            self.idle_subtitle = "or click to browse your files"
+        else:
+            self.idle_title = "Select a QR image"
+            self.idle_subtitle = "Click to browse your files"
 
         if not self.has_content and not self.camera_visible:
+            self.title_label.configure(text=self.idle_title)
             self.subtitle.configure(text=self.idle_subtitle)
 
     # ======================================================
@@ -451,12 +356,12 @@ class ScanUploadCard(ctk.CTkFrame):
             self.preview_label.destroy()
             self.preview_label = None
 
-        # Hide upload icon only
+        # Hide the upload icon only
         self.icon.pack_forget()
 
         if image is not None:
 
-            image.thumbnail((190, 190))
+            image.thumbnail((170, 170))
 
             self.preview_image = ctk.CTkImage(
                 light_image=image,
@@ -468,12 +373,13 @@ class ScanUploadCard(ctk.CTkFrame):
             self.preview_label = ctk.CTkLabel(
                 self.placeholder,
                 text="",
+                text_color=ThemeManager.get_color("text"),
                 image=self.preview_image,
                 fg_color="transparent"
             )
 
             self.preview_label.pack(
-                pady=(15, 10),
+                pady=(0, 8),
                 before=self.title_label
             )
 
@@ -497,33 +403,32 @@ class ScanUploadCard(ctk.CTkFrame):
             text="Replace Image"
         )
 
+        self.upload_frame.set_solid(True)
+
         theme = ThemeManager.get_theme()
-
-
-        self.upload_frame.configure(
-            border_color=theme["primary"]
-        )
 
         if not hasattr(self, "clear_button"):
 
             self.clear_button = ctk.CTkButton(
                 self,
                 text=f"{icons.icon('delete')}  Clear Image",
-                width=180,
-                height=42,
-                corner_radius=12,
+                width=150,
+                height=36,
+                corner_radius=11,
                 fg_color="transparent",
                 border_width=1,
                 hover_color=theme["card_hover"],
                 border_color=theme["border"],
                 text_color=theme["danger"],
+                font=("Segoe UI", 12),
                 command=self.clear
             )
 
             self.clear_button.pack(
                 anchor="w",
-                padx=20,
-                pady=(10, 18)
+                padx=CARD_PAD,
+                pady=(12, 0),
+                before=self.tips
             )
 
     # ======================================================
@@ -539,14 +444,14 @@ class ScanUploadCard(ctk.CTkFrame):
             self.preview_label.destroy()
             self.preview_label = None
 
-        # Bring upload icon back
+        # Bring the upload icon back
         self.icon.pack(
-            pady=(15, 10),
+            pady=(0, 8),
             before=self.title_label
         )
 
         self.title_label.configure(
-            text="Select your QR Image"
+            text=self.idle_title
         )
 
         self.subtitle.configure(
@@ -557,11 +462,7 @@ class ScanUploadCard(ctk.CTkFrame):
             text="Browse Image"
         )
 
-        theme = ThemeManager.get_theme()
-
-        self.upload_frame.configure(
-            border_color=theme["border"]
-        )
+        self.upload_frame.set_solid(False)
 
         if hasattr(self, "clear_button"):
             self.clear_button.destroy()
@@ -582,22 +483,10 @@ class ScanUploadCard(ctk.CTkFrame):
 
     def refresh_theme(self):
 
+        super().refresh_theme()
         theme = ThemeManager.get_theme()
 
-        self.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"]
-        )
-
-        self.upload_frame.configure(
-            fg_color=theme["entry"],
-            border_color=theme["primary"] if self.has_content else theme["border"]
-        )
-
-
-        self.title.configure(
-            text_color=theme["text"]
-        )
+        self.upload_frame.apply_theme()
 
         self.title_label.configure(
             text_color=theme["text"]
@@ -607,13 +496,14 @@ class ScanUploadCard(ctk.CTkFrame):
             text_color=theme["text_secondary"]
         )
 
-        self.icon.configure(
-            text_color=theme["primary"]
-        )
+        self.icon.configure(image=self._upload_icon())
 
         self.supported_label.configure(
             text_color=theme["text_secondary"]
         )
+
+        for label in self.tip_labels:
+            label.configure(text_color=theme["text_secondary"])
 
         self.browse_button.configure(
             fg_color=theme["primary"],
@@ -621,15 +511,12 @@ class ScanUploadCard(ctk.CTkFrame):
             text_color=theme["on_primary"]
         )
 
-        for button in (self.paste_button, self.region_button, self.camera_button):
-            button.configure(
-                hover_color=theme["card_hover"],
-                border_color=theme["border"],
-                text_color=theme["text"]
-            )
+        for tile in (self.image_button, self.camera_button,
+                     self.region_button, self.paste_button):
+            tile.apply_theme()
 
         self.camera_frame.configure(
-            fg_color=theme["entry"],
+            fg_color=theme["segment_bg"],
             border_color=theme["primary"]
         )
         self.camera_stop_button.configure(

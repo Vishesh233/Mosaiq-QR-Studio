@@ -1,3 +1,5 @@
+import tkinter
+
 import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
@@ -250,3 +252,71 @@ class IconTileRow(ctk.CTkFrame):
     def apply_theme(self):
         for tile in self.tiles.values():
             tile.apply_theme()
+
+
+# ====================================================
+
+
+def mix_colors(a, b, k):
+    """Blend hex colour ``a`` towards ``b`` by ``k`` (0..1)."""
+    a, b = a.lstrip("#"), b.lstrip("#")
+    parts = [int(a[i:i + 2], 16) + (int(b[i:i + 2], 16) - int(a[i:i + 2], 16)) * k
+             for i in (0, 2, 4)]
+    return "#%02X%02X%02X" % tuple(max(0, min(255, round(p))) for p in parts)
+
+
+class DashedZone(ctk.CTkFrame):
+    """A rounded, dashed outline around its content (CustomTkinter has no dashed border).
+
+    Put content into ``self.inner``; ``set_solid(True)`` turns the dashes into a solid line
+    (e.g. once a file has been chosen).
+    """
+
+    RADIUS = 14
+
+    def __init__(self, parent, height=300):
+        theme = ThemeManager.get_theme()
+        super().__init__(parent, fg_color="transparent", height=height)
+        self.pack_propagate(False)
+        self._solid = False
+
+        # tkinter.Canvas is not themed by retheme_tree, so apply_theme() paints it.
+        self.canvas = tkinter.Canvas(self, highlightthickness=0, bd=0, bg=theme["card"])
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.canvas.bind("<Configure>", self._redraw)
+
+        self.inner = ctk.CTkFrame(self, fg_color="transparent")
+        self.inner.place(relx=0.5, rely=0.5, anchor="center")
+
+    def set_solid(self, solid):
+        self._solid = bool(solid)
+        self._redraw()
+
+    def apply_theme(self):
+        self.canvas.configure(bg=ThemeManager.get_theme()["card"])
+        self._redraw()
+
+    def _redraw(self, _event=None):
+        theme = ThemeManager.get_theme()
+        canvas = self.canvas
+        canvas.delete("outline")
+        w, h = canvas.winfo_width(), canvas.winfo_height()
+        if w < 20 or h < 20:
+            return
+        pad, r = 2, self.RADIUS
+        x0, y0, x1, y1 = pad, pad, w - pad, h - pad
+        points = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1,
+                  x1 - r, y1, x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0, x0 + r, y0]
+        color = theme["primary"] if self._solid else mix_colors(
+            theme["primary"], theme["card"], 0.45)
+        canvas.create_line(*points, smooth=True, width=1.5, fill=color,
+                           dash=() if self._solid else (6, 5), tags="outline")
+
+    def bind_click(self, callback):
+        """Make the whole zone (and everything inside it) clickable."""
+        for widget in (self, self.canvas, self.inner):
+            widget.bind("<Button-1>", lambda _e: callback())
+        try:
+            self.canvas.configure(cursor="hand2")
+        except Exception:
+            pass

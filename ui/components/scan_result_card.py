@@ -1,315 +1,125 @@
-import tkinter
 import webbrowser
 import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
 from ui import icons
+from ui.layout import SectionCard, autohide_scrollbar, restyle_scrollable
 from utils import qr_payloads
 
+WAITING_TEXT = "Nothing yet — scan a QR to see it here."
 
-class ScanResultCard(ctk.CTkFrame):
+
+class ScanResultCard(SectionCard):
+    """Sticky "Result": type chip, the decoded title, its fields and the copy buttons.
+
+    The buttons are pinned to the bottom; the decoded content scrolls above them, so a
+    long text can never push a button out of the card.
+    """
 
     def __init__(self, parent):
-        theme = ThemeManager.get_theme()
-
-        super().__init__(
-            parent,
-            corner_radius=16,
-            border_width=1,
-            fg_color=theme["card"],
-            border_color=theme["border"],
-            width=380
-        )
+        super().__init__(parent, title="Result", dot=True)
 
         self.result = ""
         self.copy_callback = None
         self.action = None
         self.button_plan = []
+        self.field_rows = []
+        self._masked = []          # [(value label, real value)] for secret fields
 
+        self.status_dot = self.badge
         self.build_ui()
 
     # ==================================================
 
     def build_ui(self):
         theme = ThemeManager.get_theme()
+        body = self.body
 
-        # The card's height follows its content (nothing is ever cut off, in
-        # any state); this empty strip keeps the width at 380 px.
-        self.width_keeper = ctk.CTkFrame(
-            self, width=340, height=0, fg_color="transparent"
-        )
-        self.width_keeper.pack(padx=20)
-
-        # ----------------------------
-        # Title
-        # ----------------------------
-        self.header = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-        self.header.pack(
-            anchor="w",
-            padx=20,
-            pady=(20, 12)
-        )
-
-        self.status_dot = ctk.CTkFrame(
-            self.header,
-            width=12,
-            height=12,
-            fg_color=theme["success"],
-            corner_radius=6
-        )
-
-        self.status_dot.pack(
-            side="left",
-            padx=(0, 10),
-        )
-
-        self.title = ctk.CTkLabel(
-            self.header,
-            text="Decoded Result",
-            font=("Segoe UI Semibold", 16),
-            text_color=theme["text"]
-        )
-
-        self.title.pack(
-            side="left",
-        )
-
-        self.divider = ctk.CTkFrame(
-            self,
-            height=1,
-            fg_color=theme["border"]
-        )
-
-        self.divider.pack(fill="x", padx=20, pady=(0, 18))
-
-        # ----------------------------
-        # Status Chip
-        # ----------------------------
-
-        self.status_chip = ctk.CTkLabel(
-            self,
-            text="Waiting",
-            height=34,
-            corner_radius=17,
-            fg_color=theme["entry"],
-            text_color=theme["text_secondary"],
-            padx=18,
-            font=("Segoe UI Semibold", 12)
-        )
-
-        self.status_chip.pack(
-            anchor="w",
-            padx=20
-        )
-
-        # ----------------------------
-        # Result Box
-        # ----------------------------
-
-        self.result_box = ctk.CTkFrame(
-            self,
-            border_width=1,
-            fg_color=theme["entry"],
-            border_color=theme["border"],
-            corner_radius=14,
-            height=128
-        )
-
-        self.result_box.pack(
-            fill="x",
-            padx=20,
-            pady=(18, 20)
-        )
-
-        self.result_box.pack_propagate(False)
-
-        # ----------------------------
-        # Content Frame
-        # ----------------------------
-
-        self.content = ctk.CTkFrame(
-            self.result_box,
-            fg_color="transparent"
-        )
-
-        self.content.pack(
-            fill="both",
-            expand=True,
-            padx=24,
-            pady=18
-        )
-
-        # ----------------------------
-        # Icon
-        # ----------------------------
-
-        self.icon = ctk.CTkLabel(
-            self.content,
-            text=icons.icon("text"),
-            width=24,
-            font=icons.icon_font(20),
-            text_color=theme["text_secondary"]
-        )
-
-        self.icon.pack(
-            side="left",
-            anchor="n",
-            padx=(0, 14)
-        )
-
-        # ----------------------------
-        # Result Label
-        # ----------------------------
-
-        self.result_label = ctk.CTkLabel(
-            self.content,
-            text="Upload a QR image to see decoded result.",
-            justify="left",
-            anchor="nw",
-            wraplength=320,
-            text_color=theme["text_secondary"],
-            cursor="arrow",
-            font=("Segoe UI", 14)
-        )
-
-        self.result_label.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-        # Wrap at the width the label really gets: the fixed wraplength was
-        # wider than the box, so long URLs ran past its edge and were clipped.
-        self.result_label.bind("<Configure>", self._fit_result_wrap)
-
-        # ----------------------------
-        # Copy Button
-        # ----------------------------
+        # ---------------- buttons (pinned to the bottom) ----------------
+        self.buttons = ctk.CTkFrame(body, fg_color="transparent")
+        self.buttons.pack(side="bottom", fill="x", pady=(12, 0))
 
         self.copy_label = f"{icons.icon('copy')}  Copy Result"
 
         self.copy_btn = ctk.CTkButton(
-            self,
+            self.buttons,
             text=self.copy_label,
-            width=200,
-            height=46,
-            corner_radius=12,
+            height=44,
+            corner_radius=11,
             border_width=0,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
-            border_color=theme["border"],
             text_color=theme["on_primary"],
             state="disabled",
             command=lambda: self._press(0),
             font=("Segoe UI Semibold", 14)
         )
-
-        self.copy_btn.pack(
-            anchor="center",
-            pady=(18, 16)
-        )
+        self.copy_btn.pack(fill="x")
         self._style_copy_btn()
 
         # Extra copy button for smart types (UPI ID, WiFi password, ...);
         # packed only when the scanned code has such a value.
         self.action_btn = ctk.CTkButton(
-            self,
+            self.buttons,
             text="",
-            width=200,
             height=40,
-            corner_radius=12,
+            corner_radius=11,
             border_width=1,
-            fg_color="transparent",
+            fg_color=theme["segment_bg"],
             hover_color=theme["card_hover"],
             border_color=theme["border"],
-            text_color=theme["primary"],
+            text_color=theme["text"],
             font=("Segoe UI Semibold", 13),
             command=lambda: self._press(1)
         )
 
-        self.divider2 = ctk.CTkFrame(
-            self,
-            height=1,
-            fg_color=theme["border"]
+        # ---------------- content (scrolls) ----------------
+        self.scroll = ctk.CTkScrollableFrame(
+            body, fg_color="transparent", corner_radius=0,
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"],
+            label_text_color=theme["text"], label_fg_color=theme["card"],
         )
+        self.scroll.pack(side="top", fill="both", expand=True)
+        autohide_scrollbar(self.scroll)
 
-        self.divider2.pack(
-            fill="x",
-            padx=20,
-            pady=(0, 16)
+        self.status_chip = ctk.CTkLabel(
+            self.scroll,
+            text="Waiting",
+            height=28,
+            corner_radius=14,
+            fg_color=theme["segment_bg"],
+            text_color=theme["text_secondary"],
+            padx=14,
+            font=("Segoe UI Semibold", 12)
         )
+        self.status_chip.pack(anchor="w", pady=(0, 12))
 
-        self.tips_frame = ctk.CTkFrame(
-            self,
-            fg_color=theme["entry"],
-            corner_radius=12,
+        self.result_box = ctk.CTkFrame(
+            self.scroll,
             border_width=1,
+            fg_color=theme["segment_bg"],
             border_color=theme["border"],
+            corner_radius=12,
         )
+        self.result_box.pack(fill="x")
 
-        self.tips_frame.pack(
-            fill="x",
-            padx=20,
-            pady=(0, 12)
+        self.result_label = ctk.CTkLabel(
+            self.result_box,
+            text=WAITING_TEXT,
+            justify="left",
+            anchor="nw",
+            wraplength=250,
+            text_color=theme["text_secondary"],
+            cursor="arrow",
+            font=("Segoe UI", 14)
         )
+        self.result_label.pack(fill="x", padx=14, pady=14)
 
-        self.tips_title = ctk.CTkLabel(
-            self.tips_frame,
-            text="TIPS",
-            font=("Segoe UI Semibold", 13),
-            text_color=theme["text"]
-        )
+        self.fields = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        self.fields.pack(fill="x", pady=(10, 0))
 
-        self.tips_title.pack(
-            anchor="w",
-            padx=16,
-            pady=(8, 4)
-        )
-
-        self.tip_bullets = []
-        self.tip_labels = []
-
-        tips = [
-            "Use high-resolution images",
-            "Ensure good contrast in the QR",
-            "Avoid cropped or blurry images"
-        ]
-
-        for index, tip in enumerate(tips):
-
-            row = ctk.CTkFrame(
-                self.tips_frame,
-                fg_color="transparent"
-            )
-
-            row.pack(
-                anchor="w",
-                padx=16,
-                pady=(1, 12 if index == len(tips) - 1 else 1)
-            )
-
-            bullet = ctk.CTkLabel(
-                row,
-                text="•",
-                text_color=theme["primary"],
-                font=("Segoe UI Bold", 16)
-            )
-
-            bullet.pack(side="left")
-            self.tip_bullets.append(bullet)
-
-            text = ctk.CTkLabel(
-                row,
-                text=tip,
-                text_color=theme["text_secondary"],
-                font=("Segoe UI", 13)
-            )
-
-            text.pack(side="left", padx=(8, 0))
-            self.tip_labels.append(text)
-        
+        self.scroll.bind("<Configure>", self._fit_wrap)
 
     # ==================================================
 
@@ -323,6 +133,14 @@ class ScanResultCard(ctk.CTkFrame):
         "email": ("text", "Email"),
         "sms": ("text", "SMS"),
     }
+    SECRET_LABELS = ("Password",)
+
+    def shown_text(self):
+        """Everything the card shows as text (title and fields), for tests and accessibility."""
+        lines = [self.result_label.cget("text")]
+        for label, value in self.field_rows:
+            lines.append(f"{label.cget('text')}: {value.cget('text')}")
+        return "\n".join(lines)
 
     def set_result(self, text):
 
@@ -337,47 +155,44 @@ class ScanResultCard(ctk.CTkFrame):
         smart = parsed.kind not in ("url", "text")
         theme = ThemeManager.get_theme()
 
+        self._clear_fields()
+
         # ----------------------------
-        # Result Text (smart types show their readable fields)
+        # Title (smart types show their title, then one row per field)
         # ----------------------------
 
         self.result_label.configure(
-            text=parsed.readable if smart else self.result,
+            text=parsed.title if smart else self.result,
             text_color=theme["primary"] if is_url else theme["text"],
-            cursor="hand2" if is_url else "arrow"
+            cursor="hand2" if is_url else "arrow",
+            font=("Segoe UI Semibold", 16) if smart else ("Segoe UI", 14),
         )
 
-        self.result_box.configure(
-            height=min(260, 70 + 24 * (1 + len(parsed.fields))) if smart else 128
-        )
+        if smart:
+            for label, value in parsed.fields:
+                self._add_field(label, value)
 
         # ----------------------------
-        # Icon + Status Chip
+        # Status chip + box
         # ----------------------------
 
         icon_name, chip_text = self.KIND_CHIPS[parsed.kind]
 
-        self.icon.configure(
-            text=icons.icon(icon_name),
-            text_color=theme["primary"] if is_url else theme["text"]
-        )
-
         self.status_chip.configure(
             text=f"{icons.icon(icon_name)}  {chip_text}",
-            fg_color=theme["card_hover"],
-            text_color=theme["primary"] if is_url else theme["text"]
+            fg_color=theme["segment_hover"],
+            text_color=theme["primary"]
         )
 
         self.result_box.configure(
             border_color=theme["primary"] if (is_url or smart) else theme["border"]
         )
+        self.status_dot.configure(fg_color=theme["success"])
 
         if is_url:
             self.result_label.bind("<Button-1>", self.open_result)
-            self.icon.bind("<Button-1>", self.open_result)
         else:
             self.result_label.unbind("<Button-1>")
-            self.icon.unbind("<Button-1>")
 
         # ----------------------------
         # Buttons (the app never launches UPI or any other app by itself)
@@ -402,11 +217,48 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.status_chip.configure(
             text="Nothing decoded",
-            fg_color=theme["entry"],
+            fg_color=theme["segment_bg"],
             text_color=theme["danger"]
         )
 
         self.result_box.configure(border_color=theme["danger"])
+        self.status_dot.configure(fg_color=theme["danger"])
+
+    # ==================================================
+
+    def _clear_fields(self):
+        for child in self.fields.winfo_children():
+            child.destroy()
+        self.field_rows = []
+        self._masked = []
+
+    def _add_field(self, label_text, value_text):
+        theme = ThemeManager.get_theme()
+        row = ctk.CTkFrame(self.fields, fg_color=theme["segment_bg"], corner_radius=10,
+                           border_width=1, border_color=theme["border"])
+        row.pack(fill="x", pady=(0, 6))
+        label = ctk.CTkLabel(row, text=label_text, font=("Segoe UI", 12),
+                             text_color=theme["text_secondary"], anchor="w")
+        label.pack(side="left", padx=(12, 8), pady=9)
+        secret = label_text in self.SECRET_LABELS and value_text
+        shown = "•" * min(10, max(6, len(value_text))) if secret else value_text
+        value = ctk.CTkLabel(row, text=shown, font=("Segoe UI Semibold", 12),
+                             text_color=theme["text"], anchor="e", justify="right",
+                             wraplength=170)
+        value.pack(side="right", padx=(8, 12), pady=9)
+        if secret:
+            # Hidden until clicked, like a password box.
+            self._masked.append((value, value_text))
+            value.bind("<Button-1>", lambda _e, v=value, real=value_text: self._reveal(v, real))
+            try:
+                value.configure(cursor="hand2")
+            except Exception:
+                pass
+        self.field_rows.append((label, value))
+
+    def _reveal(self, label, real):
+        hidden = label.cget("text") != real
+        label.configure(text=real if hidden else "•" * min(10, max(6, len(real))))
 
     # ==================================================
 
@@ -456,8 +308,8 @@ class ScanResultCard(ctk.CTkFrame):
 
         if len(plan) > 1:
             self.action_btn.configure(text=plan[1][0])
-            if not self.action_btn.winfo_ismapped():
-                self.action_btn.pack(after=self.copy_btn, pady=(0, 14))
+            if not self.action_btn.winfo_manager():
+                self.action_btn.pack(fill="x", pady=(8, 0))
         else:
             self.action_btn.pack_forget()
 
@@ -485,13 +337,11 @@ class ScanResultCard(ctk.CTkFrame):
 
     # ==================================================
 
-    def _fit_result_wrap(self, event):
-        # The label's canvas fills the space pack gives it; its inner text
-        # label only reports the size of the current text.
-        if not isinstance(event.widget, tkinter.Canvas):
-            return
-        width = int(event.width / self.result_label._get_widget_scaling()) - 8
-        if width > 40 and abs(width - self.result_label.cget("wraplength")) > 2:
+    def _fit_wrap(self, event=None):
+        # Wrap long text at the width the scrolling area really has.
+        scale = self._get_widget_scaling()
+        width = int(self.scroll.winfo_width() / scale) - 76
+        if width > 80 and abs(width - self.result_label.cget("wraplength")) > 2:
             self.result_label.configure(wraplength=width)
 
     # ==================================================
@@ -501,9 +351,9 @@ class ScanResultCard(ctk.CTkFrame):
         theme = ThemeManager.get_theme()
         if str(self.copy_btn.cget("state")) == "disabled":
             self.copy_btn.configure(
-                fg_color=theme["card_hover"],
-                hover_color=theme["card_hover"],
-                text_color_disabled=theme["text_secondary"],
+                fg_color=theme["segment_bg"],
+                hover_color=theme["segment_bg"],
+                text_color_disabled=theme["text_muted"],
             )
         else:
             self.copy_btn.configure(
@@ -518,32 +368,28 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.result = ""
         theme = ThemeManager.get_theme()
-        self.icon.configure(
-            text=icons.icon("text"),
-            text_color=theme["text_secondary"]
-        )
+
+        self._clear_fields()
 
         self.result_label.configure(
-            text="Upload a QR image to see decoded result.",
+            text=WAITING_TEXT,
             text_color=theme["text_secondary"],
-            cursor="arrow"
+            cursor="arrow",
+            font=("Segoe UI", 14),
         )
 
         self.status_chip.configure(
             text="Waiting",
-            fg_color=theme["entry"],
+            fg_color=theme["segment_bg"],
             text_color=theme["text_secondary"]
         )
 
-        self.result_box.configure(
-            border_color=theme["border"],
-            height=128
-        )
+        self.result_box.configure(border_color=theme["border"])
+        self.status_dot.configure(fg_color=theme["text_muted"])
 
         self._set_buttons([])
 
         self.result_label.unbind("<Button-1>")
-        self.icon.unbind("<Button-1>")
 
     # ==================================================
 
@@ -571,63 +417,33 @@ class ScanResultCard(ctk.CTkFrame):
 
     def refresh_theme(self):
 
+        super().refresh_theme()
         theme = ThemeManager.get_theme()
 
-        self.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"]
-        )
-
-        self.title.configure(
-            text_color=theme["text"]
-        )
-
-        self.divider.configure(
-            fg_color=theme["border"]
-        )
-
-        self.divider2.configure(
-            fg_color=theme["border"]
-        )
-
-        self.tips_frame.configure(
-            fg_color=theme["entry"],
-            border_color=theme["border"]
-        )
-
-        self.tips_title.configure(
-            text_color=theme["text"]
-        )
-
-        for bullet in self.tip_bullets:
-            bullet.configure(text_color=theme["primary"])
-
-        for label in self.tip_labels:
-            label.configure(text_color=theme["text_secondary"])
-
+        restyle_scrollable(self.scroll, "card")
+        self.result_box.configure(fg_color=theme["segment_bg"])
         self._style_copy_btn()
-
         self.action_btn.configure(
+            fg_color=theme["segment_bg"],
             hover_color=theme["card_hover"],
             border_color=theme["border"],
-            text_color=theme["primary"]
+            text_color=theme["text"]
         )
 
+        # State colours (waiting / result / error) are re-applied from what is shown.
         if not self.result:
-            self.status_chip.configure(
-                fg_color=theme["entry"],
-                text_color=theme["text_secondary"]
-            )
+            self.clear_colours()
+        else:
+            self.set_result(self.result)
 
-            self.result_box.configure(
-                fg_color=theme["entry"],
-                border_color=theme["border"]
-            )
-
-            self.result_label.configure(
-                text_color=theme["text_secondary"]
-            )
-
-            self.icon.configure(
-                text_color=theme["text_secondary"]
-            )
+    def clear_colours(self):
+        """Re-colour the empty or error state after a theme change (text is kept)."""
+        theme = ThemeManager.get_theme()
+        error = self.status_chip.cget("text") == "Nothing decoded"
+        self.status_chip.configure(
+            fg_color=theme["segment_bg"],
+            text_color=theme["danger"] if error else theme["text_secondary"])
+        self.result_label.configure(text_color=theme["text_secondary"])
+        self.result_box.configure(border_color=theme["danger"] if error else theme["border"])
+        self.status_dot.configure(
+            fg_color=theme["danger"] if error else theme["text_muted"])

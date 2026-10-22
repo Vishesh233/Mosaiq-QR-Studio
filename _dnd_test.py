@@ -90,7 +90,7 @@ def test_fallbacks():
         sp = app.scan_page
         check("fallback: app starts", app.root.winfo_exists() == 1)
         check("fallback: no drop hint",
-              sp.upload_card.subtitle.cget("text") == "Click to browse" and not sp.drop_enabled)
+              sp.upload_card.title_label.cget("text") == "Select a QR image" and not sp.drop_enabled)
         sp.scan_dropped_files([])           # the handler stays safe to call
         app.root.update()
         check("fallback: handler reports non-image", "not an image" in sp.result_card.result_label.cget("text"))
@@ -275,7 +275,7 @@ def test_real_drop():
         if st is None:
             return
         check("dnd available in this environment", st["dnd_error"] is None, str(st["dnd_error"]))
-        check("drop hint is shown", "drop an image" in st["subtitle"], st["subtitle"])
+        check("drop hint is shown", "Drop a QR image" in st["title"], st["title"])
         time.sleep(0.5)
 
         gen = QRGenerator()
