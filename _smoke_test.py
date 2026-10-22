@@ -48,6 +48,7 @@ def main():
     # --- Scan workflow: decode the just-generated image via a temp file ---
     import tempfile
     from utils.qr_scanner import QRScanner
+    from utils.qr_generator import QRGenerator
 
     tmp = os.path.join(tempfile.gettempdir(), "_smoke_qr.png")
     gp.generated_image.save(tmp)
@@ -178,6 +179,91 @@ def main():
             problems.append("empty result did not clear")
     finally:
         webbrowser.open = original_open
+    app.show_generate_page()
+    root.update_idletasks()
+
+    # --- Clipboard scan: real Windows clipboard, every case ---
+    import subprocess
+    import win32clipboard
+    from utils.clipboard import ClipboardManager
+
+    def set_clipboard_text(text):
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
+        finally:
+            win32clipboard.CloseClipboard()
+
+    def empty_clipboard():
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+        finally:
+            win32clipboard.CloseClipboard()
+
+    app.show_scan_page()
+    root.update_idletasks()
+    sp = app.scan_page
+    rc = sp.result_card
+    wifi_text = qr_payloads.build_wifi("PasteNet", "paste-pass-1", "WPA")
+    ClipboardManager.copy_image(QRGenerator().generate(wifi_text))
+    sp.paste_from_clipboard()
+    if rc.result != wifi_text or not sp.upload_card.has_content:
+        problems.append("clipboard image was not scanned into the result panel")
+
+    rc.clear()
+    ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
+    root.focus_force(); root.update()
+    root.event_generate("<Control-v>")
+    root.update()
+    if rc.result != "https://example.com/ctrl-v":
+        problems.append("Ctrl+V on the scan page did not paste the clipboard image")
+
+    app.show_generate_page()
+    root.update_idletasks()
+    rc.clear()
+    root.event_generate("<Control-v>")
+    root.update()
+    if rc.result:
+        problems.append("Ctrl+V scanned while the Generate page was showing")
+    app.show_scan_page()
+    root.update_idletasks()
+
+    empty_clipboard()
+    sp.paste_from_clipboard()
+    if rc.result or rc.status_chip.cget("text") != "Nothing decoded":
+        problems.append("empty clipboard did not show the 'no image' message")
+    if "no image" not in rc.result_label.cget("text").lower():
+        problems.append(f"empty clipboard message: {rc.result_label.cget('text')!r}")
+
+    set_clipboard_text("just text on the clipboard")
+    sp.paste_from_clipboard()
+    if rc.result or "no image" not in rc.result_label.cget("text").lower():
+        problems.append("text-only clipboard was not rejected clearly")
+
+    blank = os.path.join(tempfile.gettempdir(), "_smoke_blank.png")
+    from PIL import Image as _Image
+    _Image.new("RGB", (200, 200), "white").save(blank)
+    qr_file = os.path.join(tempfile.gettempdir(), "_smoke_clip_file.png")
+    QRGenerator().generate("https://example.com/from-file").save(qr_file)
+    notimg = os.path.join(tempfile.gettempdir(), "_smoke_notes.txt")
+    open(notimg, "w").write("x")
+    for path, check_fn, label in (
+        (qr_file, lambda: rc.result == "https://example.com/from-file", "copied QR file"),
+        (blank, lambda: not rc.result and rc.status_chip.cget("text") == "Nothing decoded", "copied blank image file"),
+        (notimg, lambda: not rc.result and "none of them is an image" in rc.result_label.cget("text"), "copied non-image file"),
+    ):
+        rc.clear()
+        subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "Set-Clipboard -Path '" + path + "'"], check=True)
+        sp.paste_from_clipboard()
+        if not check_fn():
+            problems.append(f"{label} on the clipboard handled wrongly: {rc.result_label.cget('text')!r}")
+    for f in (blank, qr_file, notimg):
+        os.remove(f)
+    empty_clipboard()
+    rc.clear()
     app.show_generate_page()
     root.update_idletasks()
 

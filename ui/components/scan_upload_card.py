@@ -19,10 +19,11 @@ class ScanUploadCard(ctk.CTkFrame):
             fg_color=theme["card"],
             border_color=theme["border"],
             width=760,
-            height=520
+            height=560
         )
 
         self.image_path = None
+        self.has_content = False
         self.preview_image = None
         self.preview_label = None
         self.upload_callback = None
@@ -55,6 +56,22 @@ class ScanUploadCard(ctk.CTkFrame):
         )
 
         self.title.pack(side="left")
+
+        self.paste_button = ctk.CTkButton(
+            self.header,
+            text=f"{icons.icon('copy')}  Paste",
+            width=110,
+            height=34,
+            corner_radius=10,
+            border_width=1,
+            fg_color="transparent",
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["text"],
+            font=("Segoe UI", 12)
+        )
+
+        self.paste_button.pack(side="right")
 
         # ---------------- Upload Area ---------------- #
 
@@ -196,52 +213,74 @@ class ScanUploadCard(ctk.CTkFrame):
     # ======================================================
 
     def show_preview(self):
+        """Preview the chosen file (self.image_path)."""
+
+        name = os.path.basename(self.image_path)
+
+        try:
+            image = Image.open(self.image_path).copy()
+        except (OSError, Image.DecompressionBombError) as e:
+            # cv2 may still decode it; only the preview is unavailable.
+            print(f"[ScanUploadCard] no preview for {name}: {e}")
+            image = None
+
+        self._render_preview(image, name)
+
+    # ======================================================
+
+    def show_image(self, image, name):
+        """Preview an image that is not a file (clipboard, screen region)."""
+
+        self.image_path = None
+        self._render_preview(image.copy(), name)
+
+    # ======================================================
+
+    def _render_preview(self, image, name):
+
+        self.has_content = True
 
         # Remove old preview if exists
         if self.preview_label is not None:
             self.preview_label.destroy()
             self.preview_label = None
 
-        try:
-            image = Image.open(self.image_path).copy()
-            image.thumbnail((190, 190))
-
-        except Exception:
-            return
-
-        self.preview_image = ctk.CTkImage(
-            light_image=image,
-            dark_image=image,
-            size=image.size
-        )
-
         # Hide upload icon only
         self.icon.pack_forget()
 
-        # Show preview
-        self.preview_label = ctk.CTkLabel(
-            self.placeholder,
-            text="",
-            image=self.preview_image,
-            fg_color="transparent"
-        )
+        if image is not None:
 
-        self.preview_label.pack(
-            pady=(15, 10)
-        )
+            image.thumbnail((190, 190))
 
-        self.preview_label.bind(
-            "<Button-1>",
-            lambda e: self.choose_image()
-        )
+            self.preview_image = ctk.CTkImage(
+                light_image=image,
+                dark_image=image,
+                size=image.size
+            )
 
-        filename = os.path.basename(self.image_path)
+            # Show preview
+            self.preview_label = ctk.CTkLabel(
+                self.placeholder,
+                text="",
+                image=self.preview_image,
+                fg_color="transparent"
+            )
 
-        if len(filename) > 28:
-            filename = filename[:25] + "..."
+            self.preview_label.pack(
+                pady=(15, 10),
+                before=self.title_label
+            )
+
+            self.preview_label.bind(
+                "<Button-1>",
+                lambda e: self.choose_image()
+            )
+
+        if len(name) > 28:
+            name = name[:25] + "..."
 
         self.title_label.configure(
-            text=filename
+            text=name
         )
 
         self.subtitle.configure(
@@ -278,7 +317,7 @@ class ScanUploadCard(ctk.CTkFrame):
             self.clear_button.pack(
                 anchor="w",
                 padx=20,
-                pady=(10, 0)
+                pady=(10, 18)
             )
 
     # ======================================================
@@ -286,6 +325,7 @@ class ScanUploadCard(ctk.CTkFrame):
     def clear(self):
 
         self.image_path = None
+        self.has_content = False
         self.preview_image = None
 
         # Remove preview
@@ -295,7 +335,8 @@ class ScanUploadCard(ctk.CTkFrame):
 
         # Bring upload icon back
         self.icon.pack(
-            pady=(15, 10)
+            pady=(15, 10),
+            before=self.title_label
         )
 
         self.title_label.configure(
@@ -344,7 +385,7 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.upload_frame.configure(
             fg_color=theme["entry"],
-            border_color=theme["primary"] if self.image_path else theme["border"]
+            border_color=theme["primary"] if self.has_content else theme["border"]
         )
 
 
@@ -372,6 +413,12 @@ class ScanUploadCard(ctk.CTkFrame):
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             text_color=theme["on_primary"]
+        )
+
+        self.paste_button.configure(
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["text"]
         )
 
         if hasattr(self, "clear_button"):
