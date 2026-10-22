@@ -17,8 +17,10 @@ def _run():
 
     app = QRCodeStudioApp()
     root = app.root
-    root.withdraw()
-    root.update_idletasks()
+    # Parked far off-screen instead of withdrawn: a withdrawn window reports every widget
+    # as unmapped, and this test checks which widgets are really shown.
+    root.geometry("1280x820+-30000+-30000")
+    root.update()
 
     problems = []
 

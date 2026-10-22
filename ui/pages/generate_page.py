@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from ui.components.hero_section import HeroSection
+from ui.layout import CARD_GAP, TwoColumnPage
 from ui.components.content_card import ContentCard
 from ui.components.preview_card import PreviewCard
 from ui.components.logo_card import LogoCard
@@ -13,120 +13,36 @@ from tkinter import filedialog
 
 
 
-class GeneratePage(ctk.CTkFrame):
+class GeneratePage(TwoColumnPage):
 
     def __init__(self, parent):
 
-        super().__init__(
-            parent,
-            fg_color="transparent"
-        )
+        super().__init__(parent)
 
         self.generator = QRGenerator()
         self.generated_image = None
 
-        # ==========================
-        # Main Container
-        # ==========================
-
-        container = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-
-        container.grid_columnconfigure(0, weight=3)
-        container.grid_columnconfigure(1, weight=2)
-
-        container.pack(
-            anchor="center",
-            padx=(90,40),
-            pady=10,
-            fill="both",
-            expand=True,
-            
-        )
-
-        # Left Side
-
-        self.left = ctk.CTkFrame(
-            container,
-            width=800,
-            fg_color="transparent"
-        )
-
-        self.left.pack(
-            side="left",
-            fill="both",
-            padx=(0,18),
-            expand=True
-        )
-
-        # ==========================================
-        # HERO SECTION
-        # ==========================================
-
-        self.hero = HeroSection(
-            self.left,
-            title="Design your QR code",
-            subtitle="Enter your content, then customize colors and add a logo."
-        )
-
-        self.hero.pack(
-            fill="x",
-            pady=(0, 16),
-        )
-
-        # ==========================================
-        # CONTENT CARD
-        # ==========================================
-
+        # Left column (scrolls)
         self.content_card = ContentCard(self.left)
+        self.content_card.pack(fill="x", pady=(0, CARD_GAP))
 
-        self.content_card.pack(
-            fill="x",
-            pady=(0, 16)
-        )
         self.logo_card = LogoCard(self.left)
-
-        self.logo_card.pack(
-            fill="x",
-            pady=(0,16)
-        )
+        self.logo_card.pack(fill="x", pady=(0, CARD_GAP))
 
         self.color_card = ColorCard(self.left)
-        self.color_card.pack(fill="x", pady=(0, 16))
-        self.action_buttons = ActionButtons(self.left)
+        self.color_card.pack(fill="x", pady=(0, CARD_GAP))
 
-        self.action_buttons.pack(
-            fill="x",
-            pady=(0, 0)
-        )   
+        self.action_buttons = ActionButtons(self.left)
+        self.action_buttons.pack(fill="x")
 
         self.action_buttons.set_generate_callback(self.generate_qr)
         self.action_buttons.set_clear_callback(self.clear_form)
         self.action_buttons.set_copy_callback(self.copy_qr)
         self.action_buttons.set_save_callback(self.save_qr)
 
-            # Right Side
-
-        self.right = ctk.CTkFrame(
-            container,
-            width=400,
-            fg_color="transparent"
-        )
-
-        self.right.pack(
-            side="left",
-            fill="y",
-            padx=(8,0)
-        )
-
+        # Right column (stays put)
         self.preview_card = PreviewCard(self.right)
-
-        self.preview_card.pack(
-            fill="x",
-            pady=(60, 0)
-        )
+        self.preview_card.pack(fill="both", expand=True)
 
     def generate_qr(self):
 
@@ -256,8 +172,7 @@ class GeneratePage(ctk.CTkFrame):
 
     def refresh_theme(self):
 
-        if hasattr(self.hero, "refresh_theme"):
-            self.hero.refresh_theme()
+        super().refresh_theme()
 
         if hasattr(self.content_card, "refresh_theme"):
             self.content_card.refresh_theme()

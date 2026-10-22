@@ -3,7 +3,7 @@ import traceback
 
 import customtkinter as ctk
 
-from ui.components.hero_section import HeroSection
+from ui.layout import TwoColumnPage
 from ui.components.scan_upload_card import ScanUploadCard
 from ui.components.scan_result_card import ScanResultCard
 from utils import cv_loader
@@ -20,7 +20,7 @@ from utils.screen_capture import (
 from utils.theme_manager import ThemeManager
 
 
-class ScanPage(ctk.CTkFrame):
+class ScanPage(TwoColumnPage):
 
     NOT_FOUND = (
         "No QR code found in this image. Try a sharper or closer picture."
@@ -28,10 +28,7 @@ class ScanPage(ctk.CTkFrame):
 
     def __init__(self, parent):
 
-        super().__init__(
-            parent,
-            fg_color="transparent"
-        )
+        super().__init__(parent)
 
         self.build_ui()
         self.upload_card.set_upload_callback(self.on_image_selected)
@@ -64,67 +61,11 @@ class ScanPage(ctk.CTkFrame):
 
     def build_ui(self):
 
-        # ---------------- Hero ---------------- #
+        self.upload_card = ScanUploadCard(self.left)
+        self.upload_card.pack(fill="x")
 
-        hero_wrapper = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-
-        hero_wrapper.pack(
-            fill="x",
-            padx=(185, 0),   
-            pady=(10, 25)
-        )
-
-
-        self.hero = HeroSection(
-            hero_wrapper,
-            title="Scan a QR code",
-            subtitle=(
-                "Upload, paste or drop an image, or use your camera, to "
-                "decode links, text, UPI, WiFi, contacts, email and SMS."
-            ),
-            
-        )
-
-        self.hero.pack(
-            anchor="w",
-            fill="x",
-            pady=(0, 12)
-        )
-
-        # ---------------- Main Layout ---------------- #
-
-        self.content = ctk.CTkFrame(
-            self,
-            fg_color="transparent",
-            width=1320,
-            height=560
-        )
-
-        self.content.pack(
-            anchor="center",
-            pady=(0, 10),
-        )
-
-        # Left Card
-
-        self.upload_card = ScanUploadCard(self.content)
-
-        self.upload_card.pack(
-            side="left",
-            padx=(0, 28)
-        )
-
-        # Right Card
-
-        self.result_card = ScanResultCard(self.content)
-
-        self.result_card.pack(
-            side="left",
-            padx=(12, 0)
-        )
+        self.result_card = ScanResultCard(self.right)
+        self.result_card.pack(fill="both", expand=True)
 
     # ==================================================
 
@@ -303,7 +244,7 @@ class ScanPage(ctk.CTkFrame):
 
     def _on_ctrl_v(self, event=None):
 
-        if self.winfo_ismapped():
+        if self.winfo_manager():          # packed = this is the page being shown
             self.paste_from_clipboard()
 
     def paste_from_clipboard(self):
@@ -382,8 +323,7 @@ class ScanPage(ctk.CTkFrame):
 
     def refresh_theme(self):
 
-        if hasattr(self.hero, "refresh_theme"):
-            self.hero.refresh_theme()
+        super().refresh_theme()
 
         if hasattr(self.upload_card, "refresh_theme"):
             self.upload_card.refresh_theme()

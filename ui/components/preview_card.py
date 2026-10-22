@@ -13,12 +13,8 @@ class PreviewCard(ctk.CTkFrame):
             corner_radius=16,
             border_width=1,
             fg_color=theme["card"],
-            border_color=theme["border"],
-            width=400,
-            height=560
+            border_color=theme["border"]
         )
-
-        self.pack_propagate(False)
 
         self.ctk_image = None
         self.image_label = None

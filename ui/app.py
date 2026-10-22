@@ -33,11 +33,11 @@ class QRCodeStudioApp:
     SCREEN_META = {
         "generate": (
             "Generate QR Code",
-            "Create a custom QR code: link, text, UPI, WiFi, contact, email or SMS.",
+            "Pick a type, fill the details, style it, then save.",
         ),
         "scan": (
-            "Scan QR Code",
-            "Decode a QR code from an image, the camera, the clipboard or the screen.",
+            "Scan a QR code",
+            "Decode links, text, UPI, WiFi, contacts, email and SMS.",
         ),
     }
 
@@ -92,16 +92,8 @@ class QRCodeStudioApp:
         self.header = Header(main)
         self.header.grid(row=0, column=0, sticky="ew")
 
-        # Scrollable Body
-        self.body = ctk.CTkScrollableFrame(
-            main,
-            fg_color="transparent",
-            corner_radius=0,
-            scrollbar_button_color=theme["scrollbar"],
-            scrollbar_button_hover_color=theme["scrollbar_hover"],
-            label_text_color=theme["text"],
-            label_fg_color=theme["background"],
-        )
+        # Body: pages fill it and scroll (or not) on their own.
+        self.body = ctk.CTkFrame(main, fg_color="transparent", corner_radius=0)
         self.body.grid(row=1, column=0, sticky="nsew")
 
         # ==========================
@@ -112,7 +104,9 @@ class QRCodeStudioApp:
         self.scan_page = ScanPage(self.body)
         self.scan_page.enable_drop(self.dnd_error)
 
-        self.generate_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
+        self._pages = {"generate": self.generate_page, "scan": self.scan_page}
+        self._current_page = None
+        self._show_page("generate")
 
         # ==========================
         # Navigation wiring
@@ -120,9 +114,6 @@ class QRCodeStudioApp:
 
         self.sidebar.add_nav_item("generate", "Generate", "generate", self.show_generate_page)
         self.sidebar.add_nav_item("scan", "Scan QR", "scan", self.show_scan_page)
-
-        # Set the initial top bar copy to match the default page.
-        self._apply_screen_meta("generate")
 
         # Closing the window must release the camera before the app exits.
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -139,18 +130,23 @@ class QRCodeStudioApp:
         title, subtitle = self.SCREEN_META.get(key, ("", ""))
         self.header.set_title(title, subtitle)
 
+    def _show_page(self, key):
+        """Show one page (and its title); leaving Scan always releases the camera."""
+        if self._current_page == "scan" and key != "scan":
+            self.scan_page.on_hide()
+        for name, page in self._pages.items():
+            if name != key:
+                page.pack_forget()
+        self._pages[key].pack(fill="both", expand=True)
+        self._current_page = key
+        self.sidebar.set_active(key)
+        self._apply_screen_meta(key)
+
     def show_generate_page(self):
-        self.scan_page.on_hide()
-        self.scan_page.pack_forget()
-        self.generate_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
-        self.sidebar.set_active("generate")
-        self._apply_screen_meta("generate")
+        self._show_page("generate")
 
     def show_scan_page(self):
-        self.generate_page.pack_forget()
-        self.scan_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
-        self.sidebar.set_active("scan")
-        self._apply_screen_meta("scan")
+        self._show_page("scan")
 
     # ==================================================
 
@@ -167,13 +163,6 @@ class QRCodeStudioApp:
         self.root.configure(fg_color=theme["background"])
         self.sidebar.refresh_theme()
         self.header.refresh_theme()
-        self.body.configure(
-            fg_color="transparent",
-            scrollbar_button_color=theme["scrollbar"],
-            scrollbar_button_hover_color=theme["scrollbar_hover"],
-            label_text_color=theme["text"],
-            label_fg_color=theme["background"],
-        )
 
         # Header / Navigation
         self.header.refresh_theme()
