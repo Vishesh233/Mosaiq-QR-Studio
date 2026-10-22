@@ -1,3 +1,4 @@
+import os
 import traceback
 
 import customtkinter as ctk
@@ -6,7 +7,10 @@ from ui.components.hero_section import HeroSection
 from ui.components.scan_upload_card import ScanUploadCard
 from ui.components.scan_result_card import ScanResultCard
 from utils.qr_scanner import QRScanner, ScanError
+from PIL import Image
+
 from ui.region_selector import RegionSelector
+from utils.camera_scanner import CameraScanner, CvFrameSource
 from utils.screen_capture import (
     ClipboardImageError, grab_clipboard_image, grab_virtual_screen
 )
@@ -36,6 +40,18 @@ class ScanPage(ctk.CTkFrame):
         )
         self.region_selector = None
         self._window_state = "normal"
+
+        # Camera: the scanner runs on its own thread; poll_id is the after() id
+        # of the UI-side poll. camera_factory exists so tests can supply a fake.
+        self.camera = None
+        self.camera_factory = CvFrameSource.open
+        self._camera_poll_id = None
+        self._last_camera_frame = None
+        self.upload_card.camera_button.configure(command=self.start_camera)
+        self.upload_card.camera_stop_button.configure(command=self.stop_camera)
+        self.upload_card.camera_settings_button.configure(
+            command=self.open_camera_settings
+        )
         # Ctrl+V pastes an image while this page is showing. The Generate page
         # has text entries, so the shortcut must stay inert there.
         self.winfo_toplevel().bind("<Control-v>", self._on_ctrl_v, add="+")
@@ -110,6 +126,8 @@ class ScanPage(ctk.CTkFrame):
 
     def on_image_selected(self, image_path):
 
+        self.stop_camera()
+
         if not image_path:
             self.result_card.clear()
             return
@@ -125,12 +143,116 @@ class ScanPage(ctk.CTkFrame):
         else:
             self.result_card.set_message(self.NOT_FOUND)
 
+    # ==================================================
+    # Camera
+    # ==================================================
+
+    def start_camera(self):
+
+        if self.camera is not None:
+            return
+
+        self.result_card.clear()
+        self.upload_card.show_camera_view("Starting camera...")
+
+        self.camera = CameraScanner(source_factory=self.camera_factory)
+        self.camera.start()
+        self._camera_poll_id = self.after(33, self._poll_camera)
+
+    def _poll_camera(self):
+
+        self._camera_poll_id = None
+
+        if self.camera is None:
+            return
+
+        frame, events = self.camera.poll()
+
+        if frame is not None:
+            self._last_camera_frame = frame
+            self.upload_card.show_camera_frame(frame)
+
+        for kind, value in events:
+
+            if kind == "running":
+                self.upload_card.set_camera_status(
+                    "Hold a QR code in front of the camera."
+                )
+
+            elif kind == "found":
+                self._camera_found(value)
+                return
+
+            elif kind == "error":
+                self._camera_failed(value)
+                return
+
+            elif kind == "stopped":
+                self.stop_camera()
+                return
+
+        self._camera_poll_id = self.after(33, self._poll_camera)
+
+    def _camera_found(self, text):
+
+        captured = self._last_camera_frame
+        self.stop_camera()
+
+        if captured is not None:
+            self.upload_card.show_image(Image.fromarray(captured), "Camera capture")
+
+        self.result_card.set_result(text)
+
+    def _camera_failed(self, message):
+
+        self._release_camera()
+        self.upload_card.show_camera_error(message)
+        self.result_card.set_message("The camera could not be used.")
+
+    def _release_camera(self):
+        """Stop the worker and make sure the camera is released (no UI changes)."""
+
+        if self._camera_poll_id is not None:
+            self.after_cancel(self._camera_poll_id)
+            self._camera_poll_id = None
+
+        if self.camera is not None:
+            self.camera.stop()
+            self.camera = None
+
+        self._last_camera_frame = None
+
+    def stop_camera(self):
+        """Stop the camera and go back to the image area. Safe to call any time."""
+
+        self._release_camera()
+        self.upload_card.hide_camera_view()
+
+    def open_camera_settings(self):
+
+        try:
+            os.startfile("ms-settings:privacy-webcam")
+        except OSError as e:
+            self.upload_card.set_camera_status(
+                f"Could not open Settings: {e}", error=True
+            )
+
+    def on_hide(self):
+        """The Scan tab is being left: never keep the camera running."""
+        self.stop_camera()
+
+    def shutdown(self):
+        """The app is closing."""
+        self.stop_camera()
+
     def _on_ctrl_v(self, event=None):
 
         if self.winfo_ismapped():
             self.paste_from_clipboard()
 
     def paste_from_clipboard(self):
+
+        self.stop_camera()
 
         try:
             image = grab_clipboard_image()
@@ -150,6 +272,7 @@ class ScanPage(ctk.CTkFrame):
         if self.region_selector is not None:
             return
 
+        self.stop_camera()
         self.region_selector = "starting"
         root = self.winfo_toplevel()
         self._window_state = root.state()      # "zoomed" when maximized

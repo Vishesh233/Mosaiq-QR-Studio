@@ -117,6 +117,15 @@ class QRCodeStudioApp:
         # Set the initial top bar copy to match the default page.
         self._apply_screen_meta("generate")
 
+        # Closing the window must release the camera before the app exits.
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+    # ==================================================
+
+    def close(self):
+        self.scan_page.shutdown()
+        self.root.destroy()
+
     # ==================================================
 
     def _apply_screen_meta(self, key):
@@ -124,6 +133,7 @@ class QRCodeStudioApp:
         self.header.set_title(title, subtitle)
 
     def show_generate_page(self):
+        self.scan_page.on_hide()
         self.scan_page.pack_forget()
         self.generate_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
         self._apply_screen_meta("generate")

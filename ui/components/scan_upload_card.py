@@ -89,6 +89,22 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.region_button.pack(side="right", padx=(0, 8))
 
+        self.camera_button = ctk.CTkButton(
+            self.header,
+            text=f"{icons.icon('scan')}  Use Camera",
+            width=140,
+            height=34,
+            corner_radius=10,
+            border_width=1,
+            fg_color="transparent",
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["text"],
+            font=("Segoe UI", 12)
+        )
+
+        self.camera_button.pack(side="right", padx=(0, 8))
+
         # ---------------- Upload Area ---------------- #
 
         self.upload_frame = ctk.CTkFrame(
@@ -203,6 +219,161 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.supported_label.pack(
             pady=(15, 0)
+        )
+
+        self.build_camera_view()
+
+    # ======================================================
+    # Camera view (replaces the upload area while the camera runs)
+    # ======================================================
+
+    def build_camera_view(self):
+        theme = ThemeManager.get_theme()
+
+        self.camera_frame = ctk.CTkFrame(
+            self,
+            height=390,
+            width=690,
+            corner_radius=16,
+            border_width=1,
+            fg_color=theme["entry"],
+            border_color=theme["primary"]
+        )
+
+        self.camera_frame.pack_propagate(False)
+
+        self.camera_label = None
+
+        self.camera_status = ctk.CTkLabel(
+            self.camera_frame,
+            text="",
+            font=("Segoe UI", 13),
+            text_color=theme["text_secondary"],
+            wraplength=560,
+            justify="center"
+        )
+
+        self.camera_buttons = ctk.CTkFrame(
+            self.camera_frame,
+            fg_color="transparent"
+        )
+
+        self.camera_stop_button = ctk.CTkButton(
+            self.camera_buttons,
+            text="Stop Camera",
+            width=170,
+            height=42,
+            corner_radius=12,
+            fg_color="transparent",
+            border_width=1,
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["danger"]
+        )
+
+        self.camera_stop_button.pack(side="left", padx=6)
+
+        self.camera_settings_button = ctk.CTkButton(
+            self.camera_buttons,
+            text="Open Camera Settings",
+            width=190,
+            height=42,
+            corner_radius=12,
+            fg_color=theme["primary"],
+            hover_color=theme["primary_hover"],
+            text_color=theme["on_primary"]
+        )
+
+        self.camera_image = None
+        self.camera_visible = False
+
+    def show_camera_view(self, status):
+        """Swap the upload area for the live camera area."""
+
+        self.clear()
+
+        self.upload_frame.pack_forget()
+        self.camera_visible = True
+
+        # A fresh label each time: a CTkLabel keeps a reference to its last
+        # CTkImage and raises TclError if that image was freed meanwhile.
+        if self.camera_label is not None:
+            self.camera_label.destroy()
+
+        self.camera_label = ctk.CTkLabel(
+            self.camera_frame,
+            text="",
+            fg_color="transparent"
+        )
+
+        self.camera_buttons.pack(side="bottom", pady=(0, 16))
+        self.camera_label.pack(pady=(16, 6))
+        self.camera_status.pack(pady=(0, 10))
+        self.camera_settings_button.pack_forget()
+        self.camera_stop_button.configure(text="Stop Camera")
+
+        self.camera_frame.pack(
+            after=self.header,
+            fill="x",
+            padx=20,
+            pady=(0, 20)
+        )
+
+        self.camera_image = None
+        self.set_camera_status(status)
+
+    def set_camera_status(self, text, error=False):
+        theme = ThemeManager.get_theme()
+        self.camera_status.configure(
+            text=text,
+            text_color=theme["danger"] if error else theme["text_secondary"]
+        )
+
+    def show_camera_frame(self, rgb):
+        """Show one preview frame (RGB ndarray) in the camera area."""
+
+        if self.camera_label is None:
+            return
+
+        frame = Image.fromarray(rgb)
+        frame.thumbnail((440, 260))
+
+        self.camera_image = ctk.CTkImage(
+            light_image=frame,
+            dark_image=frame,
+            size=frame.size
+        )
+
+        self.camera_label.configure(image=self.camera_image)
+
+    def show_camera_error(self, text):
+        """Replace the preview with a message and a shortcut to the privacy settings."""
+
+        if self.camera_label is not None:
+            self.camera_label.destroy()
+            self.camera_label = None
+        self.camera_image = None
+        self.set_camera_status(text, error=True)
+        self.camera_stop_button.configure(text="Close")
+        self.camera_settings_button.pack(side="left", padx=6)
+
+    def hide_camera_view(self):
+
+        if not self.camera_visible:
+            return
+
+        self.camera_visible = False
+        self.camera_frame.pack_forget()
+        if self.camera_label is not None:
+            self.camera_label.destroy()
+            self.camera_label = None
+        self.camera_status.pack_forget()
+        self.camera_buttons.pack_forget()
+        self.upload_frame.pack(
+            after=self.header,
+            fill="x",
+            padx=20,
+            pady=(0, 20)
         )
 
     # ======================================================
@@ -431,12 +602,27 @@ class ScanUploadCard(ctk.CTkFrame):
             text_color=theme["on_primary"]
         )
 
-        for button in (self.paste_button, self.region_button):
+        for button in (self.paste_button, self.region_button, self.camera_button):
             button.configure(
                 hover_color=theme["card_hover"],
                 border_color=theme["border"],
                 text_color=theme["text"]
             )
+
+        self.camera_frame.configure(
+            fg_color=theme["entry"],
+            border_color=theme["primary"]
+        )
+        self.camera_stop_button.configure(
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["danger"]
+        )
+        self.camera_settings_button.configure(
+            fg_color=theme["primary"],
+            hover_color=theme["primary_hover"],
+            text_color=theme["on_primary"]
+        )
 
         if hasattr(self, "clear_button"):
             self.clear_button.configure(
