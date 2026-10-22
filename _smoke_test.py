@@ -11,7 +11,7 @@ import sys
 os.environ.setdefault("PYTHONUTF8", "1")
 
 
-def main():
+def _run():
     # Import AFTER cwd is the repo root so package imports resolve.
     from ui.app import QRCodeStudioApp
 
@@ -407,6 +407,28 @@ def main():
         sys.exit(1)
 
     print("SMOKE_OK: nav, generate, all 6 QR types, decode-roundtrip, settings dialog all ran")
+
+
+def main():
+    """Run the checks without leaving the tester's saved settings changed."""
+    from utils import settings_store
+
+    path = settings_store._settings_path()
+    try:
+        with open(path, "rb") as fh:
+            saved = fh.read()
+    except OSError:
+        saved = None
+
+    try:
+        _run()
+    finally:
+        if saved is None:
+            if os.path.exists(path):
+                os.remove(path)
+        else:
+            with open(path, "wb") as fh:
+                fh.write(saved)
 
 
 if __name__ == "__main__":

@@ -123,10 +123,10 @@ QR code · QR generator · QR scanner · QR code maker · WiFi QR · UPI QR · Q
 
 | File | Caption |
 |---|---|
-| `assets/images/generate.png` | Design a QR code with your colours, a logo and a live preview |
+| `assets/images/generate.png` | Make a UPI, WiFi, contact, email or SMS code (or a link) with your colours and logo |
 | `assets/images/scan.png` | Scan a QR code from an image, the clipboard, your screen or your webcam |
 | `assets/images/theme_settings.png` | Eight themes with live preview |
-| `assets/images/light_mode.png` | Light mode with the Daylight theme |
+| `assets/images/light_mode.png` | The light Daylight theme, scanning a UPI code |
 | `assets/thumbnail/qr-studio-splash-1920x1080.png` | The intro animation (can be turned off) |
 
 The package already contains the app's logos (rendered by `make_assets.py`), so the
