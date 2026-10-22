@@ -10,7 +10,7 @@ import customtkinter as ctk
 
 from utils import qr_payloads as payloads
 from utils.theme_manager import ThemeManager
-from ui.widgets import ModernEntry
+from ui.widgets import ModernEntry, ModernSegmented
 
 
 class ModernText(ctk.CTkTextbox):
@@ -28,6 +28,8 @@ class ModernText(ctk.CTkTextbox):
             border_color=theme["entry_border"],
             fg_color=theme["entry"],
             text_color=theme["text"],
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"],
             font=("Segoe UI", 14),
             wrap="word"
         )
@@ -45,25 +47,15 @@ class ModernText(ctk.CTkTextbox):
         self.configure(
             fg_color=theme["entry"],
             border_color=theme["entry_border"],
-            text_color=theme["text"]
+            text_color=theme["text"],
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"]
         )
 
 
 def style_segmented(button):
-    """Apply the app's look to a CTkSegmentedButton."""
-
-    theme = ThemeManager.get_theme()
-
-    button.configure(
-        fg_color=theme["entry"],
-        selected_color=theme["primary"],
-        selected_hover_color=theme["primary_hover"],
-        unselected_color=theme["entry"],
-        unselected_hover_color=theme["card_hover"],
-        text_color=theme["text"],
-        font=("Segoe UI", 12),
-        corner_radius=10
-    )
+    """Re-apply the active theme to a ModernSegmented button."""
+    button.apply_theme()
 
 
 class _Field(ctk.CTkFrame):
@@ -199,7 +191,7 @@ class WifiForm(_Form):
         )
         self.security_label.pack(side="left", padx=(0, 10))
 
-        self.security = ctk.CTkSegmentedButton(
+        self.security = ModernSegmented(
             options,
             values=list(payloads.WIFI_SECURITY),
             command=self._security_changed

@@ -97,6 +97,10 @@ class QRCodeStudioApp:
             main,
             fg_color="transparent",
             corner_radius=0,
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"],
+            label_text_color=theme["text"],
+            label_fg_color=theme["background"],
         )
         self.body.grid(row=1, column=0, sticky="nsew")
 
@@ -161,7 +165,13 @@ class QRCodeStudioApp:
         self.root.configure(fg_color=theme["background"])
         self.sidebar.refresh_theme()
         self.header.refresh_theme()
-        self.body.configure(fg_color="transparent")
+        self.body.configure(
+            fg_color="transparent",
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"],
+            label_text_color=theme["text"],
+            label_fg_color=theme["background"],
+        )
 
         # Header / Navigation
         self.header.refresh_theme()

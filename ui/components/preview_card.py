@@ -187,7 +187,8 @@ class PreviewCard(ctk.CTkFrame):
             value = ctk.CTkLabel(
                 row,
                 text=right,
-                font=("Segoe UI Semibold", 13)
+                font=("Segoe UI Semibold", 13),
+                text_color=theme["text"]
             )
             value.pack(side="right")
             if left == "Resolution":
@@ -236,6 +237,7 @@ class PreviewCard(ctk.CTkFrame):
             self.image_label = ctk.CTkLabel(
                 self.preview_box,
                 text="",
+                text_color=ThemeManager.get_color("text"),
                 image=self.ctk_image
             )
 

@@ -69,6 +69,7 @@ class Sidebar(ctk.CTkFrame):
             brand, text="",
             image=self._brand_logo_image(),
             fg_color="transparent",
+            text_color=theme["text"],
         )
         self._brand_mark.grid(row=0, column=0)
 

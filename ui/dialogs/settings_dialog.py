@@ -61,7 +61,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def _build_ui(self):
         theme = ThemeManager.get_theme()
 
-        self.container = ctk.CTkFrame(self, fg_color=theme["background"], corner_radius=0)
+        self.container = ctk.CTkFrame(self, fg_color=theme["background"], bg_color=theme["background"], corner_radius=0)
         self.container.pack(fill="both", expand=True)
 
         # ---------------- Title ---------------- #
@@ -132,7 +132,8 @@ class SettingsDialog(ctk.CTkToplevel):
             progress_color=theme["primary"],
             button_color=theme["text"],
             button_hover_color=theme["text_secondary"],
-            fg_color=theme["border"],
+            fg_color=theme["scrollbar"],
+            text_color=theme["text"],
         ).pack(side="right", padx=18)
 
         # ---------------- Bottom Buttons ---------------- #

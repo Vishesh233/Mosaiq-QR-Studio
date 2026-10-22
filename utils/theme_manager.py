@@ -69,8 +69,8 @@ class ThemeManager:
             "card": "#121620",
             "card_hover": "#1B2130",
 
-            "primary": "#7C6CFF",
-            "primary_hover": "#6F5DF0",
+            "primary": "#6D5DF5",
+            "primary_hover": "#5B4BE0",
             "on_primary": "#FFFFFF",
             "accent": "#36D7E8",
 
@@ -84,7 +84,12 @@ class ThemeManager:
             "border": "#282F3D",
 
             "entry": "#0D1118",
-            "entry_border": "#2C3444",
+            "entry_border": "#404756",
+            "text_muted": "#7C8592",
+            "segment_bg": "#10151E",
+            "segment_hover": "#26294C",
+            "scrollbar": "#484F5B",
+            "scrollbar_hover": "#656A75",
         },
 
         # ==========================
@@ -102,7 +107,7 @@ class ThemeManager:
             "card": "#131315",
             "card_hover": "#1E1E22",
 
-            "primary": "#3B82F6",
+            "primary": "#2B6BF0",
             "primary_hover": "#2563EB",
             "on_primary": "#FFFFFF",
             "accent": "#60A5FA",
@@ -117,7 +122,12 @@ class ThemeManager:
             "border": "#27272A",
 
             "entry": "#0C0C0E",
-            "entry_border": "#303036",
+            "entry_border": "#44444A",
+            "text_muted": "#828289",
+            "segment_bg": "#121214",
+            "segment_hover": "#20293F",
+            "scrollbar": "#49494B",
+            "scrollbar_hover": "#666668",
         },
 
         # ==========================
@@ -135,8 +145,8 @@ class ThemeManager:
             "card": "#0C0E12",
             "card_hover": "#161A21",
 
-            "primary": "#7C6CFF",
-            "primary_hover": "#6F5DF0",
+            "primary": "#6D5DF5",
+            "primary_hover": "#5B4BE0",
             "on_primary": "#FFFFFF",
             "accent": "#36D7E8",
 
@@ -150,7 +160,12 @@ class ThemeManager:
             "border": "#1E2330",
 
             "entry": "#05060A",
-            "entry_border": "#232936",
+            "entry_border": "#383D49",
+            "text_muted": "#7B838F",
+            "segment_bg": "#0A0B10",
+            "segment_hover": "#22233F",
+            "scrollbar": "#404550",
+            "scrollbar_hover": "#5E626C",
         },
 
         # ==========================
@@ -183,7 +198,12 @@ class ThemeManager:
             "border": "#17363C",
 
             "entry": "#081016",
-            "entry_border": "#1D3C44",
+            "entry_border": "#314F56",
+            "text_muted": "#6B898F",
+            "segment_bg": "#0C141B",
+            "segment_hover": "#153A45",
+            "scrollbar": "#38555A",
+            "scrollbar_hover": "#557074",
         },
 
         # ==========================
@@ -216,7 +236,12 @@ class ThemeManager:
             "border": "#2A2342",
 
             "entry": "#0B0816",
-            "entry_border": "#31294D",
+            "entry_border": "#443C5F",
+            "text_muted": "#857DA0",
+            "segment_bg": "#0F0C1C",
+            "segment_hover": "#2E264C",
+            "scrollbar": "#4A4360",
+            "scrollbar_hover": "#665F7B",
         },
 
         # ==========================
@@ -249,7 +274,12 @@ class ThemeManager:
             "border": "#3A2A21",
 
             "entry": "#110B08",
-            "entry_border": "#45322A",
+            "entry_border": "#57453D",
+            "text_muted": "#927D70",
+            "segment_bg": "#160F0C",
+            "segment_hover": "#422B1A",
+            "scrollbar": "#594A41",
+            "scrollbar_hover": "#74655C",
         },
 
         # ==========================
@@ -282,7 +312,12 @@ class ThemeManager:
             "border": "#1F3A2E",
 
             "entry": "#09140F",
-            "entry_border": "#244536",
+            "entry_border": "#385749",
+            "text_muted": "#739385",
+            "segment_bg": "#0C1A14",
+            "segment_hover": "#153C2D",
+            "scrollbar": "#40594E",
+            "scrollbar_hover": "#5C746A",
         },
 
         # ==========================
@@ -305,17 +340,22 @@ class ThemeManager:
             "on_primary": "#FFFFFF",
             "accent": "#0891B2",
 
-            "success": "#16A34A",
-            "warning": "#D97706",
-            "danger": "#DC2626",
+            "success": "#147536",
+            "warning": "#A84A0A",
+            "danger": "#B91C1C",
 
             "text": "#0F172A",
-            "text_secondary": "#64748B",
+            "text_secondary": "#4B5A73",
 
             "border": "#E2E8F0",
 
             "entry": "#F8FAFC",
-            "entry_border": "#CBD5E1",
+            "entry_border": "#B7C0CA",
+            "text_muted": "#727E92",
+            "segment_bg": "#F3F6F9",
+            "segment_hover": "#DADCF6",
+            "scrollbar": "#C0C7D0",
+            "scrollbar_hover": "#A3A9B5",
         },
     }
 

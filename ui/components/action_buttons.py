@@ -60,7 +60,8 @@ class ActionButtons(ctk.CTkFrame):
             border_width=1,
             border_color=theme["border"],
             hover_color=theme["card_hover"],
-            text_color=theme["text_secondary"],
+            text_color=theme["text_muted"],
+            text_color_disabled=theme["text_muted"],
             font=("Segoe UI Semibold", 13),
             state="disabled",
             command=self.on_copy
@@ -85,7 +86,8 @@ class ActionButtons(ctk.CTkFrame):
             border_width=1,
             border_color=theme["border"],
             hover_color=theme["card_hover"],
-            text_color=theme["text_secondary"],
+            text_color=theme["text_muted"],
+            text_color_disabled=theme["text_muted"],
             font=("Segoe UI Semibold", 13),
             state="disabled",
             command=self.on_save
@@ -141,12 +143,12 @@ class ActionButtons(ctk.CTkFrame):
 
         self.copy_btn.configure(
             state="disabled",
-            text_color=ThemeManager.get_theme()["text_secondary"]
+            text_color=ThemeManager.get_theme()["text_muted"]
         )
 
         self.save_btn.configure(
             state="disabled",
-            text_color=ThemeManager.get_theme()["text_secondary"]
+            text_color=ThemeManager.get_theme()["text_muted"]
         )
 
     def refresh_theme(self):
@@ -179,12 +181,12 @@ class ActionButtons(ctk.CTkFrame):
 
         # Preserve enabled/disabled text colors
         if str(self.copy_btn.cget("state")) == "disabled":
-            self.copy_btn.configure(text_color=theme["text_secondary"])
+            self.copy_btn.configure(text_color=theme["text_muted"])
         else:
             self.copy_btn.configure(text_color=theme["text"])
 
         if str(self.save_btn.cget("state")) == "disabled":
-            self.save_btn.configure(text_color=theme["text_secondary"])
+            self.save_btn.configure(text_color=theme["text_muted"])
         else:
             self.save_btn.configure(text_color=theme["text"])
 

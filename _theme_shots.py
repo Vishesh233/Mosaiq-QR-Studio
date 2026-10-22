@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 os.environ.setdefault("PYTHONUTF8", "1")
 os.environ["QRSTUDIO_NO_SPLASH"] = "1"
@@ -45,6 +46,21 @@ def _one(theme, outdir):
 
     app.show_scan_page()
     shot("scan")
+    app.show_generate_page()
+
+    # Settings dialog (its own window handle, so still window-only).
+    from ui.dialogs.settings_dialog import SettingsDialog
+
+    dlg = SettingsDialog(app.header)
+    dlg.geometry("+120+60")
+    end = time.time() + 1.0   # CTkToplevel finishes its first paint after a short delay
+    while time.time() < end:
+        root.update()
+        time.sleep(0.02)
+    # GA_ROOT: a transient dialog's GetParent is its owner, not its own frame.
+    capture_window(win32gui.GetAncestor(dlg.winfo_id(), 2)).save(
+        os.path.join(outdir, f"{theme}-settings.png"))
+    dlg.destroy()
     app.close()
 
 

@@ -3,6 +3,7 @@ import customtkinter as ctk
 from utils.theme_manager import ThemeManager
 from ui.widgets import ModernEntry
 from ui.components.type_forms import FORMS, style_segmented
+from ui.widgets import ModernSegmented
 from utils.qr_payloads import TYPE_NAMES
 
 
@@ -54,7 +55,7 @@ class ContentCard(ctk.CTkFrame):
 
         # ---------------- Type + form ---------------- #
 
-        self.type_selector = ctk.CTkSegmentedButton(
+        self.type_selector = ModernSegmented(
             content_frame,
             values=list(TYPE_NAMES),
             command=self.set_type,
