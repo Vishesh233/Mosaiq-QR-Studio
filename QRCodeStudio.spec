@@ -160,6 +160,8 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=APP_ICON,
+    # Default manifest + PerMonitorV2 DPI awareness (see packaging/exe.manifest).
+    manifest=os.path.join(SPECPATH, "packaging", "exe.manifest"),
 )
 
 coll = COLLECT(

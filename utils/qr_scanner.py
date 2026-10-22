@@ -1,12 +1,13 @@
 import time
 
-import cv2
 import numpy as np
 from PIL import Image
 
+from utils import cv_loader
+from utils.scan_errors import ScanError, ScannerUnavailable  # noqa: F401  (re-exported)
 
-class ScanError(Exception):
-    """The input could not be read as an image (not the same as "no QR in it")."""
+# OpenCV is loaded on first use (cv_loader.load()), not when the app starts, and a
+# failure to load it surfaces as ScannerUnavailable instead of crashing the app.
 
 
 # ----------------------------------------------------------------------
@@ -17,15 +18,17 @@ class ScanError(Exception):
 # ----------------------------------------------------------------------
 
 def _invert(gray):
-    return cv2.bitwise_not(gray)
+    return cv_loader.load().bitwise_not(gray)
 
 
 def _sharpen(gray):
+    cv2 = cv_loader.load()
     blurred = cv2.GaussianBlur(gray, (0, 0), 3)
     return cv2.addWeighted(gray, 2.0, blurred, -1.0, 0)
 
 
 def _adaptive(gray):
+    cv2 = cv_loader.load()
     # The block size follows the image so it spans roughly one QR module row.
     block = max(21, (max(gray.shape[:2]) // 32) | 1)
     return cv2.adaptiveThreshold(
@@ -62,8 +65,11 @@ class QRScanner:
         """Decode the QR code in an image file.
 
         Returns the text, or None when the image holds no readable QR code.
-        Raises ScanError when the file cannot be read as an image.
+        Raises ScanError when the file cannot be read as an image, and
+        ScannerUnavailable when OpenCV cannot be loaded on this PC.
         """
+        cv2 = cv_loader.load()
+
         try:
             raw = np.fromfile(image_path, dtype=np.uint8)
         except OSError as e:
@@ -88,8 +94,10 @@ class QRScanner:
         budget          seconds a thorough scan may take before giving up (a
                         picture with QR-like patterns that never decode can
                         make every recipe slow).
-        Returns the text, or None when no QR code is found.
+        Returns the text, or None when no QR code is found. Raises
+        ScannerUnavailable when OpenCV cannot be loaded on this PC.
         """
+        cv2 = cv_loader.load()
         gray = QRScanner._to_gray(image)
         deadline = time.perf_counter() + budget
 
@@ -125,6 +133,8 @@ class QRScanner:
     @staticmethod
     def _try(name, prepare, detector, gray):
 
+        cv2 = cv_loader.load()
+
         try:
             data, points, _ = detector.detectAndDecode(prepare(gray))
         except cv2.error as e:
@@ -140,6 +150,8 @@ class QRScanner:
 
     @staticmethod
     def _to_gray(image):
+
+        cv2 = cv_loader.load()
 
         if isinstance(image, Image.Image):
             if image.mode in ("RGBA", "LA", "P"):
@@ -158,6 +170,8 @@ class QRScanner:
     @staticmethod
     def _candidates(gray):
         """The image itself, then versions that help hard cases."""
+
+        cv2 = cv_loader.load()
 
         yield gray
 

@@ -27,6 +27,7 @@ Imported at runtime:
 - `numpy` — OpenCV dependency
 - `qrcode` — QR generation (image backend chosen via factory → **hidden imports required**)
 - `win32clipboard` (pywin32) — copy QR to Windows clipboard
+- OpenCV is imported lazily (`utils/cv_loader.py`): it loads on the first scan or camera use, and if it cannot load (for example Windows N editions without the Media Feature Pack, where `mf.dll` is missing) Scan shows a clear message while Generate keeps working.
 - `tkinterdnd2` — optional drag and drop of image files onto the Scan page (PyInstaller's stock hook bundles only the win-x64 tkdnd library, about 0.3 MB; if it fails to load, the app runs without drop support)
 - `darkdetect` — used by CustomTkinter
 - `colorama`, `packaging` — transitive deps

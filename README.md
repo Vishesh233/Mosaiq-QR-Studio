@@ -64,6 +64,8 @@ Run from the repository root with the venv's Python (they open real windows; the
 | `_region_test.py` | screen-region overlay, crop mapping, window restore |
 | `_camera_test.py` | webcam thread, fake and real camera, release on stop, tab change and exit |
 | `_dnd_test.py` | drag and drop fallback, and real OLE drops (needs `tkinterdnd2`) |
+| `_cv2_missing_test.py` | OpenCV loads lazily; if it cannot load (Windows N without the Media Feature Pack) the app starts, Generate works, Scan/Camera show a clear message and the cause is logged |
+| `_frozen_exe_test.py` | the built exe: PerMonitorV2 DPI awareness, real Screen Region scan at the PC's display scaling, clean exit (build first) |
 
 ## Build
 

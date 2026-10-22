@@ -6,7 +6,9 @@ import customtkinter as ctk
 from ui.components.hero_section import HeroSection
 from ui.components.scan_upload_card import ScanUploadCard
 from ui.components.scan_result_card import ScanResultCard
+from utils import cv_loader
 from utils.qr_scanner import QRScanner, ScanError
+from utils.scan_errors import ScannerUnavailable
 from PIL import Image
 
 from ui.region_selector import RegionSelector
@@ -155,6 +157,13 @@ class ScanPage(ctk.CTkFrame):
             return
 
         self.result_card.clear()
+
+        try:
+            cv_loader.load()            # the camera needs OpenCV too
+        except ScannerUnavailable as e:
+            self.result_card.set_message(str(e))
+            return
+
         self.upload_card.show_camera_view("Starting camera...")
 
         self.camera = CameraScanner(source_factory=self.camera_factory)
@@ -360,7 +369,11 @@ class ScanPage(ctk.CTkFrame):
     def scan_image(self, image):
         """Decode a PIL image (clipboard, screen region, drop) into the result panel."""
 
-        result = QRScanner.decode_image(image)
+        try:
+            result = QRScanner.decode_image(image)
+        except ScanError as e:          # includes ScannerUnavailable
+            self.result_card.set_message(str(e))
+            return
 
         if result:
             self.result_card.set_result(result)

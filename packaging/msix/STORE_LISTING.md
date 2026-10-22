@@ -52,7 +52,9 @@ lowest rating (3+ / Everyone).
 > "Use Camera" needs a webcam: it shows a live preview and reads a QR code held in front of
 > it; without a camera it shows a clear message instead. "Screen Region" hides the window
 > briefly and lets you drag a box around a QR code on screen. The gear icon (top right)
-> opens Settings, where the theme can be changed and the intro turned off.
+> opens Settings, where the theme can be changed and the intro turned off. On Windows N
+> editions without the Media Feature Pack, Generate and the rest of the app work and the
+> Scan tab explains that the Media Feature Pack is needed.
 
 ## Store listing (English, United States)
 

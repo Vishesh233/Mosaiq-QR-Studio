@@ -11,5 +11,6 @@ Mosaiq QR Studio runs entirely on your PC.
 - **Screen.** When you choose **Screen Region**, the app takes one picture of your screen so you can select the QR code on it. That picture is used in memory only and is discarded; it is never saved or sent anywhere.
 - **Your files stay local.** Images you open or drop for scanning or as a logo, and the QR codes you save, are read and written only on your PC, in the places you choose.
 - **Settings.** The app saves only your theme and intro-animation preference, in a small settings file under your Windows user profile. When the app is installed from the Microsoft Store, uninstalling it removes that file.
+- **Error log.** If a part of the app cannot start (for example the scanning component on a PC without the Windows Media Feature Pack), a short technical note is written to a small log file (`mosaiq.log`, about 100 KB at most) next to the settings file. It does not contain the contents of any QR code or your files, stays on your PC and is never sent anywhere.
 
 Questions: open an issue at https://github.com/Vishesh233/Mosaiq-QR-Studio/issues

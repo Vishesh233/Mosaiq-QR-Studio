@@ -12,10 +12,11 @@ import threading
 import time
 import traceback
 
-import cv2
 import numpy as np
 
+from utils import cv_loader
 from utils.qr_scanner import QRScanner
+from utils.scan_errors import ScannerUnavailable
 
 CAMERA_HELP = (
     "Check that a camera is connected, that no other app is using it, and "
@@ -43,6 +44,8 @@ class CvFrameSource:
     @classmethod
     def open(cls, indices=(0, 1, 2)):
         """Open the first camera that delivers a frame; raise CameraError if none does."""
+
+        cv2 = cv_loader.load()
 
         for index in indices:
             # DirectShow opens quickly; Media Foundation is the fallback.
@@ -156,7 +159,7 @@ class CameraScanner:
             self.events.put(("running", None))
             self._stream(source)
 
-        except CameraError as e:
+        except (CameraError, ScannerUnavailable) as e:
             self.events.put(("error", str(e)))
 
         except Exception as e:
@@ -263,6 +266,7 @@ class CameraScanner:
 
     def _publish_preview(self, frame):
 
+        cv2 = cv_loader.load()
         height, width = frame.shape[:2]
 
         if width > PREVIEW_MAX_WIDTH:
