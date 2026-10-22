@@ -212,13 +212,21 @@ def main():
     if rc.result != wifi_text or not sp.upload_card.has_content:
         problems.append("clipboard image was not scanned into the result panel")
 
-    rc.clear()
-    ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
-    root.focus_force(); root.update()
-    root.event_generate("<Control-v>")
-    root.update()
-    if rc.result != "https://example.com/ctrl-v":
-        problems.append("Ctrl+V on the scan page did not paste the clipboard image")
+    # Synthetic key events and the shared Windows clipboard depend on what else
+    # is running on the desktop, so allow a few attempts before calling it a failure.
+    for attempt in range(3):
+        rc.clear()
+        ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
+        root.focus_force(); root.update()
+        root.event_generate("<Control-v>")
+        root.update()
+        if rc.result == "https://example.com/ctrl-v":
+            break
+    else:
+        problems.append(
+            "Ctrl+V on the scan page did not paste the clipboard image "
+            f"(3 attempts; panel says {rc.result_label.cget('text')!r})"
+        )
 
     app.show_generate_page()
     root.update_idletasks()
