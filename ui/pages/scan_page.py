@@ -3,7 +3,7 @@ import customtkinter as ctk
 from ui.components.hero_section import HeroSection
 from ui.components.scan_upload_card import ScanUploadCard
 from ui.components.scan_result_card import ScanResultCard
-from utils.qr_scanner import QRScanner
+from utils.qr_scanner import QRScanner, ScanError
 
 
 class ScanPage(ctk.CTkFrame):
@@ -92,7 +92,11 @@ class ScanPage(ctk.CTkFrame):
             self.result_card.clear()
             return
 
-        result = QRScanner.decode(image_path)
+        try:
+            result = QRScanner.decode(image_path)
+        except ScanError as e:
+            self.result_card.set_result(str(e))
+            return
 
         if result:
             self.result_card.set_result(result)

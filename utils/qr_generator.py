@@ -1,6 +1,7 @@
 from PIL import Image
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
+from qrcode.exceptions import DataOverflowError
 
 
 class QRGenerator:
@@ -68,7 +69,15 @@ class QRGenerator:
         )
 
         qr.add_data(data)
-        qr.make(fit=True)
+
+        try:
+            qr.make(fit=True)
+        except (DataOverflowError, ValueError) as e:
+            # qrcode reports "too big even for version 40" as either one.
+            raise ValueError(
+                "There is too much data for one QR code. "
+                "Shorten the text and try again."
+            ) from e
 
         image = qr.make_image(
             fill_color=qr_color,
