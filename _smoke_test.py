@@ -266,7 +266,19 @@ def _run():
 
     def open_clipboard():
         # Another program (clipboard history, sync) can hold the clipboard for a while.
-        ClipboardManager._open(attempts=100, pause=0.05)
+        try:
+            ClipboardManager._open(attempts=100, pause=0.05)
+        except Exception:
+            import ctypes
+            import win32gui
+            import win32process
+            holder = ctypes.windll.user32.GetOpenClipboardWindow()
+            who = ""
+            if holder:
+                who = (f"pid {win32process.GetWindowThreadProcessId(holder)[1]}, class "
+                       f"{win32gui.GetClassName(holder)!r}, title {win32gui.GetWindowText(holder)!r}")
+            print(f"[smoke] clipboard stayed locked for 5 s; open by: {who or 'nobody we can see'}")
+            raise
 
     def wait_for_clipboard():
         """The copy buttons tested above change the clipboard many times in a second; a

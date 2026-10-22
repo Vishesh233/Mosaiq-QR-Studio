@@ -90,3 +90,10 @@ def remember(color):
         return
     colours = [parsed] + [c for c in load_recent() if c != parsed]
     settings_store.set(RECENT_KEY, colours[:MAX_RECENT])
+
+
+def blend(a, b, t):
+    """The colour ``t`` (0..1) of the way from ``a`` to ``b``, as "#RRGGBB"."""
+    ra, ga, ba = hex_to_rgb(a)
+    rb, gb, bb = hex_to_rgb(b)
+    return rgb_to_hex(ra + (rb - ra) * t, ga + (gb - ga) * t, ba + (bb - ba) * t)

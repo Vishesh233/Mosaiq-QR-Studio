@@ -1,13 +1,17 @@
+import customtkinter as ctk
+
 from ui.components.color_card import ColorCard
 from ui.components.logo_card import LogoCard
 from ui.components.style_card import StyleCard
 from ui.layout import SectionCard
 from ui.widgets import ModernSegmented
+from utils import qr_checks, qr_presets
 from utils.qr_render import QRStyle
+from utils.theme_manager import ThemeManager
 
 
 class DesignCard(SectionCard):
-    """Step 2: tabs (Colours / Style / Logo) that style the QR."""
+    """Step 2: tabs (Colours / Style / Logo) that style the QR, with a contrast hint."""
 
     def __init__(self, parent):
 
@@ -15,27 +19,53 @@ class DesignCard(SectionCard):
 
         self.change_callback = None
 
-        self.panes = {}
-        self.panes["Colours"] = ColorCard(self.body)
-        self.panes["Style"] = StyleCard(self.body)
-        self.panes["Logo"] = LogoCard(self.body)
+        self.tabs = ModernSegmented(
+            self.body, values=["Colours", "Style", "Logo"], command=self.show_tab, height=32,
+        )
+        self.tabs.pack(anchor="w", pady=(0, 12))
+
+        # The panes live in their own holder so the hint stays below whichever is showing.
+        self.pane_holder = ctk.CTkFrame(self.body, fg_color="transparent")
+        self.pane_holder.pack(fill="x")
+        self.panes = {
+            "Colours": ColorCard(self.pane_holder),
+            "Style": StyleCard(self.pane_holder),
+            "Logo": LogoCard(self.pane_holder),
+        }
         self.colours = self.panes["Colours"]
         self.style = self.panes["Style"]
         self.logo = self.panes["Logo"]
         for pane in self.panes.values():
             pane.change_callback = self._changed
+        self.colours.preset_callback = self.apply_preset
 
-        self.tabs = ModernSegmented(
-            self.body, values=list(self.panes), command=self.show_tab, height=32,
-        )
-        self.tabs.pack(anchor="w", pady=(0, 12))
+        self.hint = ctk.CTkLabel(
+            self.body, text="", anchor="w", font=("Segoe UI", 12),
+            text_color=ThemeManager.get_theme()["success"])
+        self.hint.pack(fill="x", pady=(12, 0))
 
         self._active = None
         self.show_tab("Colours")
+        self._update_state()
+
+    # ------------------------------------------------------------------
 
     def _changed(self):
+        self._update_state()
         if self.change_callback:
             self.change_callback()
+
+    def _update_state(self):
+        """Highlight the matching preset and show the contrast advice."""
+        style = self.get_style()
+        self.colours.preset_row.set_selected(qr_presets.matching(style))
+        check = qr_checks.check_style(style)
+        theme = ThemeManager.get_theme()
+        dot = "●  "
+        self.hint.configure(
+            text=dot + check.text,
+            text_color=theme["success"] if check.level == "good" else theme["warning"])
+        self.last_check = check
 
     def show_tab(self, name):
         if self._active is not None:
@@ -43,6 +73,18 @@ class DesignCard(SectionCard):
         self._active = name
         self.tabs.set(name)
         self.panes[name].pack(fill="x")
+
+    def apply_preset(self, name):
+        """Set colours and style from a preset (the logo is kept); one preview refresh."""
+        preset = qr_presets.get(name).style
+        callback, self.change_callback = self.change_callback, None
+        try:
+            self.colours.set_colors(qr=preset.fg, bg=preset.bg)
+            self.style.set_style(module_shape=preset.module_shape, eye_shape=preset.eye_shape,
+                                 gradient=preset.gradient, gradient_end=preset.fg2)
+        finally:
+            self.change_callback = callback
+        self._changed()
 
     def get_style(self):
         """The QRStyle chosen in the tabs."""
@@ -58,9 +100,11 @@ class DesignCard(SectionCard):
             self.logo.reset_logo()
         finally:
             self.change_callback = callback
+        self._update_state()
 
     def refresh_theme(self):
         super().refresh_theme()
         self.tabs.apply_theme()
         for pane in self.panes.values():
             pane.refresh_theme()
+        self._update_state()

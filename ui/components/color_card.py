@@ -1,6 +1,68 @@
 import customtkinter as ctk
+import numpy as np
+from PIL import Image
+
 from ui.dialogs.color_picker import pick_color
+from utils import colors, qr_presets
 from utils.theme_manager import ThemeManager
+
+
+def _chip_image(style, size=40):
+    """A little picture of a preset's colours: its gradient, or the solid QR colour."""
+    a = np.array(colors.hex_to_rgb(style.fg), dtype=np.float32)
+    b = np.array(colors.hex_to_rgb(style.fg2 if style.gradient != "none" else style.fg),
+                 dtype=np.float32)
+    axis = np.linspace(0.0, 1.0, size, dtype=np.float32)
+    t = (axis[None, :] + axis[:, None]) / 2.0
+    pixels = a[None, None, :] + (b - a)[None, None, :] * t[:, :, None]
+    return Image.fromarray(np.clip(pixels + 0.5, 0, 255).astype("uint8"))
+
+
+class PresetRow(ctk.CTkFrame):
+    """One-click colour + style combinations."""
+
+    def __init__(self, parent, command):
+        super().__init__(parent, fg_color="transparent")
+        self._command = command
+        self._frames = {}
+        self._captions = {}
+        self._images = []           # kept: a label raises TclError if its CTkImage is collected
+        theme = ThemeManager.get_theme()
+        for column, preset in enumerate(qr_presets.PRESETS):
+            holder = ctk.CTkFrame(self, fg_color="transparent")
+            holder.grid(row=0, column=column, padx=(0, 10))
+            frame = ctk.CTkFrame(holder, width=48, height=48, corner_radius=12,
+                                 border_width=2, border_color=theme["card"],
+                                 fg_color=theme["card"])
+            frame.pack()
+            frame.pack_propagate(False)
+            image = ctk.CTkImage(light_image=_chip_image(preset.style),
+                                 dark_image=_chip_image(preset.style), size=(38, 38))
+            self._images.append(image)
+            chip = ctk.CTkLabel(frame, text="", image=image, corner_radius=10,
+                                text_color=theme["text"])
+            chip.place(relx=0.5, rely=0.5, anchor="center")
+            caption = ctk.CTkLabel(holder, text=preset.name, font=("Segoe UI", 11),
+                                   text_color=theme["text_secondary"])
+            caption.pack(pady=(4, 0))
+            for widget in (frame, chip, caption, holder):
+                widget.bind("<Button-1>", lambda _e, n=preset.name: self._command(n))
+            self._frames[preset.name] = frame
+            self._captions[preset.name] = caption
+
+    def set_selected(self, name):
+        theme = ThemeManager.get_theme()
+        for key, frame in self._frames.items():
+            frame.configure(border_color=theme["primary"] if key == name else theme["card"])
+            self._captions[key].configure(
+                text_color=theme["text"] if key == name else theme["text_secondary"])
+        self._selected = name
+
+    def refresh_theme(self):
+        self.set_selected(getattr(self, "_selected", None))
+        theme = ThemeManager.get_theme()
+        for frame in self._frames.values():
+            frame.configure(fg_color=theme["card"])
 
 
 class ColorCard(ctk.CTkFrame):
@@ -19,6 +81,14 @@ class ColorCard(ctk.CTkFrame):
 
         self.grid_columnconfigure((0, 1), weight=1, uniform="swatch")
 
+        self.preset_label = ctk.CTkLabel(
+            self, text="PRESETS", font=("Segoe UI", 11), anchor="w",
+            text_color=ThemeManager.get_theme()["text_secondary"])
+        self.preset_label.grid(row=0, column=0, columnspan=2, sticky="w")
+        self.preset_row = PresetRow(self, command=self._preset_clicked)
+        self.preset_row.grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
+        self.preset_callback = None
+
         self.qr_card, self.qr_preview, self.qr_hex, self.qr_caption = self._swatch(
             0, "qr", "QR colour · click to edit")
         self.bg_card, self.bg_preview, self.bg_hex, self.bg_caption = self._swatch(
@@ -35,7 +105,7 @@ class ColorCard(ctk.CTkFrame):
             self, fg_color=theme["segment_bg"], corner_radius=11,
             border_width=1, border_color=theme["border"],
         )
-        card.grid(row=0, column=column, sticky="ew", padx=(0, 6) if column == 0 else (6, 0))
+        card.grid(row=2, column=column, sticky="ew", padx=(0, 6) if column == 0 else (6, 0))
 
         preview = ctk.CTkFrame(
             card, width=30, height=30, corner_radius=8,
@@ -65,9 +135,15 @@ class ColorCard(ctk.CTkFrame):
 
     # =====================================================
 
+    def _preset_clicked(self, name):
+        if self.preset_callback:
+            self.preset_callback(name)
+
     def refresh_theme(self):
 
         theme = ThemeManager.get_theme()
+        self.preset_label.configure(text_color=theme["text_secondary"])
+        self.preset_row.refresh_theme()
 
         for card, preview, hex_label, caption in (
             (self.qr_card, self.qr_preview, self.qr_hex, self.qr_caption),
