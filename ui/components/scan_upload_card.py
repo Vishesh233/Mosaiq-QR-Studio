@@ -73,6 +73,22 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.paste_button.pack(side="right")
 
+        self.region_button = ctk.CTkButton(
+            self.header,
+            text=f"{icons.icon('screen')}  Screen Region",
+            width=150,
+            height=34,
+            corner_radius=10,
+            border_width=1,
+            fg_color="transparent",
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["text"],
+            font=("Segoe UI", 12)
+        )
+
+        self.region_button.pack(side="right", padx=(0, 8))
+
         # ---------------- Upload Area ---------------- #
 
         self.upload_frame = ctk.CTkFrame(
@@ -415,11 +431,12 @@ class ScanUploadCard(ctk.CTkFrame):
             text_color=theme["on_primary"]
         )
 
-        self.paste_button.configure(
-            hover_color=theme["card_hover"],
-            border_color=theme["border"],
-            text_color=theme["text"]
-        )
+        for button in (self.paste_button, self.region_button):
+            button.configure(
+                hover_color=theme["card_hover"],
+                border_color=theme["border"],
+                text_color=theme["text"]
+            )
 
         if hasattr(self, "clear_button"):
             self.clear_button.configure(

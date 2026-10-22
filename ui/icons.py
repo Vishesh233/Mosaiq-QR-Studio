@@ -28,6 +28,7 @@ ICONS = {
     "check": ("\uE73E", "OK"),
     "info": ("\uE946", "Info"),
     "app": ("\uE71D", "QR"),
+    "screen": ("\uE7F4", "Screen"),
 }
 
 _PROBE_ROOT = None
