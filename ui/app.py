@@ -32,7 +32,7 @@ class QRCodeStudioApp:
     SCREEN_META = {
         "generate": (
             "Generate QR Code",
-            "Create a custom QR code from a URL or text.",
+            "Create a custom QR code: link, text, UPI, WiFi, contact, email or SMS.",
         ),
         "scan": (
             "Scan QR Code",

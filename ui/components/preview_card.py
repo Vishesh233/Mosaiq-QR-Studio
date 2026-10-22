@@ -97,7 +97,7 @@ class PreviewCard(ctk.CTkFrame):
 
         self.placeholder = ctk.CTkLabel(
             self.preview_box,
-            text="QR Preview\n\nEnter a URL and Click Generate",
+            text="QR Preview\n\nFill in your details and click Generate",
             justify="center",
             text_color=theme["text_secondary"],
             font=("Segoe UI", 15)

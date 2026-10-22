@@ -2,6 +2,8 @@ import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
 from ui.widgets import ModernEntry
+from ui.components.type_forms import FORMS, style_segmented
+from utils.qr_payloads import TYPE_NAMES
 
 
 class ContentCard(ctk.CTkFrame):
@@ -15,11 +17,11 @@ class ContentCard(ctk.CTkFrame):
             fg_color=theme["card"],
             corner_radius=16,
             border_width=1,
-            border_color=theme["border"],
-            height=250
+            border_color=theme["border"]
         )
 
-        self.pack_propagate(False)
+        self.forms = {}
+        self.active_type = TYPE_NAMES[0]
 
         self.build_ui()
 
@@ -50,26 +52,33 @@ class ContentCard(ctk.CTkFrame):
 
         self.title.pack(anchor="w")
 
-        # ---------------- URL ---------------- #
+        # ---------------- Type + form ---------------- #
 
-        self.label1 = ctk.CTkLabel(
+        self.type_selector = ctk.CTkSegmentedButton(
             content_frame,
-            text="WEBSITE URL OR TEXT",
-            font=("Segoe UI", 11),
-            text_color=theme["text_secondary"]
+            values=list(TYPE_NAMES),
+            command=self.set_type,
+            height=34
         )
 
-        self.label1.pack(
-            anchor="w",
-            pady=(16, 5)
-        )
+        style_segmented(self.type_selector)
+        self.type_selector.set(self.active_type)
+        self.type_selector.pack(fill="x", pady=(14, 16))
 
-        self.url_entry = ModernEntry(
+        self.form_holder = ctk.CTkFrame(
             content_frame,
-            placeholder="https://example.com"
+            fg_color="transparent"
         )
 
-        self.url_entry.pack(fill="x")
+        self.form_holder.pack(fill="x")
+
+        for name, form_class in FORMS.items():
+            self.forms[name] = form_class(self.form_holder)
+
+        self.forms[self.active_type].pack(fill="x")
+
+        # Kept for callers that fill the URL/Text box directly.
+        self.url_entry = self.forms["URL / Text"].entry
 
         # ---------------- Filename ---------------- #
 
@@ -107,23 +116,31 @@ class ContentCard(ctk.CTkFrame):
             text_color=theme["text"]
         )
 
-        self.label1.configure(
-            text_color=theme["text_secondary"]
-        )
-
         self.label2.configure(
             text_color=theme["text_secondary"]
         )
 
-        self.url_entry.refresh_theme()
+        style_segmented(self.type_selector)
+
+        for form in self.forms.values():
+            form.refresh_theme()
+
         self.file_entry.refresh_theme()
 
-        # ModernEntry refresh baad me add karenge
+    # ==================================================
+
+    def set_type(self, name):
+
+        self.forms[self.active_type].pack_forget()
+        self.active_type = name
+        self.type_selector.set(name)
+        self.forms[name].pack(fill="x")
 
     # ==================================================
 
     def get_content(self):
-        return self.url_entry.get().strip()
+        """Text to encode for the selected type. Raises ValueError (user message)."""
+        return self.forms[self.active_type].payload()
 
     # ==================================================
 
@@ -134,5 +151,8 @@ class ContentCard(ctk.CTkFrame):
 
     def clear(self):
 
-        self.url_entry.delete(0, "end")
+        for form in self.forms.values():
+            form.clear()
+
+        self.set_type(TYPE_NAMES[0])
         self.file_entry.delete(0, "end")

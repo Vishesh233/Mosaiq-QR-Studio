@@ -131,13 +131,10 @@ class GeneratePage(ctk.CTkFrame):
     def generate_qr(self):
 
         # Get content
-        data = self.content_card.get_content()
-
-        if not data:
-            messagebox.showwarning(
-                "Missing Content",
-                "Please enter a URL or text."
-            )
+        try:
+            data = self.content_card.get_content()
+        except ValueError as e:
+            messagebox.showwarning("Check Your Details", str(e))
             return
 
         try:

@@ -56,6 +56,78 @@ def main():
         problems.append(f"roundtrip decode mismatch: {decoded!r}")
     os.remove(tmp)
 
+    # --- Every QR type through the real form widgets: fill, generate, scan, parse ---
+    from utils import qr_payloads
+    cc = gp.content_card
+
+    def fill(field, value):
+        w = field.widget
+        if field.multiline:
+            w.clear()
+            w.insert("1.0", value)
+        else:
+            w.delete(0, "end")
+            w.insert(0, value)
+
+    def type_case(name, setup, kind, expect_title):
+        cc.clear()
+        cc.set_type(name)
+        setup(cc.forms[name])
+        gp.generated_image = None
+        gp.generate_qr()
+        root.update_idletasks()
+        if gp.generated_image is None:
+            problems.append(f"{name}: generate_qr() produced no image")
+            return
+        text = QRScanner.decode_image(gp.generated_image)
+        parsed = qr_payloads.parse(text or "")
+        if parsed.kind != kind or parsed.title != expect_title:
+            problems.append(f"{name}: scanned as {parsed.kind!r} {parsed.title!r}")
+
+    def setup_upi(f):
+        fill(f.upi_id, "shop@okaxis"); fill(f.payee, "Corner Shop")
+        fill(f.amount, "99.50"); fill(f.note, "Order #12")
+
+    def setup_wifi(f):
+        fill(f.ssid, "Home;Net"); fill(f.password, "pa:ss;word1")
+        f.security.set("WPA"); f.hidden.select()
+
+    def setup_contact(f):
+        fill(f.name, "Asha Verma"); fill(f.phone, "+91 98765 43210")
+        fill(f.email, "asha@example.com"); fill(f.organisation, "Mosaiq")
+
+    def setup_email(f):
+        fill(f.to, "hi@example.com"); fill(f.subject, "Hello"); fill(f.body, "Line 1" + chr(10) + "Line 2")
+
+    def setup_sms(f):
+        fill(f.number, "+919876543210"); fill(f.message, "On my way")
+
+    type_case("URL / Text", lambda f: fill(f.entry_field, "https://example.com/t"),
+              "url", "URL detected")
+    type_case("UPI Payment", setup_upi, "upi", "UPI payment: Corner Shop")
+    type_case("WiFi", setup_wifi, "wifi", "WiFi: Home;Net")
+    type_case("Contact", setup_contact, "contact", "Contact: Asha Verma")
+    type_case("Email", setup_email, "email", "Email: hi@example.com")
+    type_case("SMS", setup_sms, "sms", "SMS: +919876543210")
+
+    # Invalid form input must be refused, not produce a QR code.
+    from tkinter import messagebox
+    shown = []
+    original_warning = messagebox.showwarning
+    messagebox.showwarning = lambda title, msg: shown.append(msg)
+    try:
+        cc.clear()
+        cc.set_type("UPI Payment")
+        fill(cc.forms["UPI Payment"].upi_id, "not-a-vpa")
+        fill(cc.forms["UPI Payment"].payee, "X")
+        gp.generated_image = None
+        gp.generate_qr()
+    finally:
+        messagebox.showwarning = original_warning
+    if gp.generated_image is not None or not shown:
+        problems.append("invalid UPI ID was not rejected with a warning")
+    cc.clear()
+
     # --- Settings dialog opens and closes cleanly ---
     from ui.dialogs.settings_dialog import SettingsDialog
     dlg = SettingsDialog(app.header)
@@ -105,7 +177,7 @@ def main():
             print(" - " + p)
         sys.exit(1)
 
-    print("SMOKE_OK: nav, generate, decode-roundtrip, settings dialog all ran")
+    print("SMOKE_OK: nav, generate, all 6 QR types, decode-roundtrip, settings dialog all ran")
 
 
 if __name__ == "__main__":
