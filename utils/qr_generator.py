@@ -3,18 +3,20 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 from qrcode.exceptions import DataOverflowError
 
+from utils import qr_render
+from utils.qr_render import QRStyle
+
 
 class QRGenerator:
     """
     Reusable QR Code Generator.
 
     Responsibilities:
-    - Generate QR Code
-    - Apply custom colors
+    - Generate QR Code (module shapes, eye shapes, gradient, colours)
     - Embed optional logo
     - Return PIL Image
 
-    No UI code should exist here.
+    No UI code should exist here. Drawing lives in utils/qr_render.py.
     """
 
     def __init__(
@@ -29,34 +31,8 @@ class QRGenerator:
 
     # =====================================================
 
-    def generate(
-        self,
-        data: str,
-        qr_color="#000000",
-        bg_color="#FFFFFF",
-        logo_path=None,
-    ):
-        """
-        Generate a QR Code.
-
-        Parameters
-        ----------
-        data : str
-            Text or URL.
-
-        qr_color : str
-            Foreground color.
-
-        bg_color : str
-            Background color.
-
-        logo_path : str | None
-            Optional logo image path.
-
-        Returns
-        -------
-        PIL.Image.Image
-        """
+    def matrix(self, data: str):
+        """The QR as rows of bools (quiet zone not included), and its version number."""
 
         if not data or not data.strip():
             raise ValueError("QR data cannot be empty.")
@@ -65,7 +41,7 @@ class QRGenerator:
             version=None,
             error_correction=self.error_correction,
             box_size=self.box_size,
-            border=self.border,
+            border=0,
         )
 
         qr.add_data(data)
@@ -79,44 +55,51 @@ class QRGenerator:
                 "Shorten the text and try again."
             ) from e
 
-        image = qr.make_image(
-            fill_color=qr_color,
-            back_color=bg_color,
-        ).convert("RGBA")
-
-        if logo_path:
-            image = self._add_logo(image, logo_path)
-
-        return image
+        return qr.get_matrix(), qr.version
 
     # =====================================================
 
-    def _add_logo(self, qr_image, logo_path):
+    def generate(
+        self,
+        data: str,
+        qr_color="#000000",
+        bg_color="#FFFFFF",
+        logo_path=None,
+        style: QRStyle = None,
+    ):
         """
-        Embed logo in the center of the QR.
+        Generate a QR Code.
+
+        Parameters
+        ----------
+        data : str
+            Text or URL.
+
+        qr_color, bg_color : str
+            Foreground / background colour (ignored when ``style`` is given).
+
+        logo_path : str | None
+            Optional logo image path.
+
+        style : QRStyle | None
+            Shapes, gradient, colours and logo size.
+
+        Returns
+        -------
+        PIL.Image.Image
         """
 
-        logo = Image.open(logo_path).convert("RGBA")
+        style = style or QRStyle(fg=qr_color, bg=bg_color)
+        matrix, _version = self.matrix(data)
 
-        qr_width, qr_height = qr_image.size
-
-        logo_size = qr_width // 5
-
-        logo.thumbnail(
-            (logo_size, logo_size),
-            Image.Resampling.LANCZOS,
-        )
-
-        x = (qr_width - logo.width) // 2
-        y = (qr_height - logo.height) // 2
-
-        qr_image.paste(
-            logo,
-            (x, y),
-            logo,
-        )
-
-        return qr_image
+        logo = Image.open(logo_path) if logo_path else None
+        try:
+            return qr_render.render(
+                matrix, style, box_size=self.box_size, border=self.border, logo=logo
+            )
+        finally:
+            if logo is not None:
+                logo.close()
 
     # =====================================================
 

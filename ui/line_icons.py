@@ -68,6 +68,12 @@ ICONS = {
     "paste": [
         ("rect", 8, 2, 8, 4, 1), ("line", (16, 4), (18, 4), (20, 6), (20, 20), (18, 22), (6, 22), (4, 20), (4, 6), (6, 4), (8, 4)),
     ],
+    # style picker (shapes are filled)
+    "shape_square": [("frect", 5, 5, 14, 14, 0)],
+    "shape_rounded": [("frect", 5, 5, 14, 14, 5)],
+    "shape_dots": [("fcircle", 7, 7, 3), ("fcircle", 17, 7, 3), ("fcircle", 7, 17, 3), ("fcircle", 17, 17, 3)],
+    "eye_square": [("rect", 3, 3, 18, 18, 0), ("frect", 8, 8, 8, 8, 0)],
+    "eye_rounded": [("rect", 3, 3, 18, 18, 6), ("frect", 8, 8, 8, 8, 3)],
     "upload": [
         ("line", (12, 16), (12, 4)), ("line", (7, 9), (12, 4), (17, 9)),
         ("line", (4, 16), (4, 19), (6, 21), (18, 21), (20, 19), (20, 16)),
@@ -110,6 +116,14 @@ def render(name, color, size=20):
             _, x, y, w, h, r = prim
             draw.rounded_rectangle((x * unit, y * unit, (x + w) * unit, (y + h) * unit),
                                    radius=r * unit, outline=rgb, width=round(width))
+        elif kind == "frect":
+            _, x, y, w, h, r = prim
+            draw.rounded_rectangle((x * unit, y * unit, (x + w) * unit, (y + h) * unit),
+                                   radius=r * unit, fill=rgb)
+        elif kind == "fcircle":
+            _, cx, cy, r = prim
+            draw.ellipse(((cx - r) * unit, (cy - r) * unit, (cx + r) * unit, (cy + r) * unit),
+                         fill=rgb)
         elif kind == "circle":
             _, cx, cy, r = prim
             draw.ellipse(((cx - r) * unit, (cy - r) * unit, (cx + r) * unit, (cy + r) * unit),

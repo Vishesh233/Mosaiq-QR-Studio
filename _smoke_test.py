@@ -268,6 +268,12 @@ def _run():
         # Another program (clipboard history, sync) can hold the clipboard for a while.
         ClipboardManager._open(attempts=100, pause=0.05)
 
+    def wait_for_clipboard():
+        """The copy buttons tested above change the clipboard many times in a second; a
+        clipboard manager running on the PC can hold it for a while afterwards."""
+        open_clipboard()
+        win32clipboard.CloseClipboard()
+
     def set_clipboard_text(text):
         open_clipboard()
         try:
@@ -288,6 +294,7 @@ def _run():
     sp = app.scan_page
     rc = sp.result_card
     wifi_text = qr_payloads.build_wifi("PasteNet", "paste-pass-1", "WPA")
+    wait_for_clipboard()
     ClipboardManager.copy_image(QRGenerator().generate(wifi_text))
     sp.paste_from_clipboard()
     if rc.result != wifi_text or not sp.upload_card.has_content:
@@ -300,6 +307,7 @@ def _run():
     if "<Control-Key-v>" not in bound and "<Control-v>" not in bound:
         problems.append("Ctrl+V is not bound on the main window")
     rc.clear()
+    wait_for_clipboard()
     ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
     sp._on_ctrl_v()
     root.update()

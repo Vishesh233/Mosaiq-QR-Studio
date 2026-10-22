@@ -14,6 +14,7 @@ import glob
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,16 +23,40 @@ RETRY = {"_dnd_test.py"}
 SLOW_TIMEOUT = 600
 
 
+def _kill_group(job):
+    """End the test's whole process tree (the drag & drop test leaves its helper app running
+    when it is cut short, and an orphan holding our pipes would block this runner forever)."""
+    import win32job
+    win32job.TerminateJobObject(job, 1)
+
+
 def run(script):
+    import win32api
+    import win32con
+    import win32job
+
     env = dict(os.environ, PYTHONUTF8="1", QRSTUDIO_NO_SPLASH="1")
     started = time.time()
-    try:
-        proc = subprocess.run([sys.executable, script], cwd=HERE, env=env, text=True,
-                              encoding="utf-8", errors="replace", capture_output=True,
-                              timeout=SLOW_TIMEOUT)
-        code, output = proc.returncode, proc.stdout + proc.stderr
-    except subprocess.TimeoutExpired as e:
-        code, output = -1, f"TIMEOUT after {SLOW_TIMEOUT}s\n{e.stdout or ''}"
+
+    # Output goes to a file, not pipes, so a leftover child can never block the read.
+    with tempfile.TemporaryFile() as sink:
+        job = win32job.CreateJobObject(None, "")
+        proc = subprocess.Popen([sys.executable, script], cwd=HERE, env=env,
+                                stdout=sink, stderr=subprocess.STDOUT)
+        handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, proc.pid)
+        win32job.AssignProcessToJobObject(job, handle)
+        try:
+            code = proc.wait(timeout=SLOW_TIMEOUT)
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            code, timed_out = -1, True
+        finally:
+            _kill_group(job)
+            win32api.CloseHandle(handle)
+        sink.seek(0)
+        output = sink.read().decode("utf-8", errors="replace")
+    if timed_out:
+        output = f"TIMEOUT after {SLOW_TIMEOUT}s\n" + output
     lines = [ln for ln in output.splitlines() if ln.strip()]
     ok_line = next((ln for ln in reversed(lines) if "_OK" in ln or "PASSED" in ln), "")
     return code, ok_line, lines[-3:], time.time() - started

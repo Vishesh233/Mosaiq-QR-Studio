@@ -19,6 +19,8 @@ class GeneratePage(TwoColumnPage):
 
         self.generator = QRGenerator()
         self.generated_image = None
+        self.generated_data = None          # the text behind generated_image
+        self._refresh_job = None
 
         # Left column (scrolls): step 1 and step 2
         self.content_card = ContentCard(self.left)
@@ -39,6 +41,40 @@ class GeneratePage(TwoColumnPage):
         self.action_buttons.set_copy_callback(self.copy_qr)
         self.action_buttons.set_save_callback(self.save_qr)
 
+        # Changing a colour, shape or the logo updates a QR that is already showing.
+        self.design_card.change_callback = self.on_design_changed
+
+    def current_style(self):
+        return self.design_card.get_style()
+
+    def on_design_changed(self):
+        """Redraw the preview with the new design (same text) shortly after the last change."""
+        if self.generated_data is None:
+            return
+        if self._refresh_job is not None:
+            self.after_cancel(self._refresh_job)
+        self._refresh_job = self.after(120, self._redraw_preview)
+
+    def _redraw_preview(self):
+        self._refresh_job = None
+        if self.generated_data is None:
+            return
+        try:
+            self._show(self.generated_data)
+        except Exception as e:
+            messagebox.showerror("QR Generation Failed", str(e))
+
+    def _show(self, data):
+        image = self.generator.generate(
+            data=data,
+            style=self.current_style(),
+            logo_path=self.logo_card.get_logo_path(),
+        )
+        self.generated_image = image
+        self.generated_data = data
+        self.preview_card.set_image(image)
+        self.action_buttons.enable_export_buttons()
+
     def generate_qr(self):
 
         # Get content
@@ -50,18 +86,7 @@ class GeneratePage(TwoColumnPage):
 
         try:
 
-            image = self.generator.generate(
-                data=data,
-                qr_color=self.color_card.get_qr_color(),
-                bg_color=self.color_card.get_bg_color(),
-                logo_path=self.logo_card.get_logo_path()
-            )
-
-            self.generated_image = image
-
-            self.preview_card.set_image(image)
-
-            self.action_buttons.enable_export_buttons()
+            self._show(data)
 
         except Exception as e:
 
@@ -72,20 +97,22 @@ class GeneratePage(TwoColumnPage):
 
     def clear_form(self):
 
+        if self._refresh_job is not None:
+            self.after_cancel(self._refresh_job)
+            self._refresh_job = None
+
         # Clear entries
         self.content_card.clear()
 
-        # Reset logo
-        self.logo_card.reset_logo()
-
-        # Reset colors
-        self.color_card.reset_colors()
+        # Reset colours, style and logo
+        self.design_card.reset()
 
         # Reset preview
         self.preview_card.clear_preview()
 
         # Remove generated image
         self.generated_image = None
+        self.generated_data = None
 
         # Disable buttons
         self.action_buttons.disable_export_buttons()

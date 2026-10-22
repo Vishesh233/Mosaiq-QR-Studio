@@ -109,6 +109,64 @@ def test_ui():
     check("buttons stay put while the left column scrolls",
           gp.action_buttons.generate_btn.winfo_rooty() == before)
 
+    # ---- Style tab: changes redraw the QR that is showing; Clear resets them ----
+    import time
+    from PIL import ImageChops
+    from utils.qr_scanner import QRScanner
+
+    def wait_redraw():
+        end = time.time() + 0.6
+        while time.time() < end:
+            root.update()
+            time.sleep(0.02)
+
+    gp.clear_form()
+    gp.content_card.url_entry.insert(0, "https://example.com/style-tab")
+    check("no preview before Generate, style change does not create one",
+          gp.generated_image is None)
+    style_tab = gp.design_card.style
+    style_tab.module_tiles.tiles["dots"].invoke()
+    wait_redraw()
+    check("style change without a QR draws nothing", gp.generated_image is None)
+    style_tab.module_tiles.tiles["square"].invoke()
+
+    gp.generate_qr()
+    plain = gp.generated_image.copy()
+    for label, action in (
+        ("dots", lambda: style_tab.module_tiles.tiles["dots"].invoke()),
+        ("rounded eyes", lambda: style_tab.eye_tiles.tiles["rounded"].invoke()),
+        ("linear gradient", lambda: style_tab.gradient_selector.set("Linear") or
+         style_tab._gradient_picked("Linear")),
+        ("QR colour", lambda: gp.color_card.set_colors(qr="#0E7490")),
+        ("background colour", lambda: gp.color_card.set_colors(bg="#FFF7E0")),
+    ):
+        before = gp.generated_image.copy()
+        action()
+        wait_redraw()
+        check(f"{label}: preview redrawn", ImageChops.difference(
+            before.convert("RGB"), gp.generated_image.convert("RGB")).getbbox() is not None)
+        check(f"{label}: preview shows the new image",
+              gp.preview_card._source is not None and gp.preview_card._source.size == gp.generated_image.size)
+        check(f"{label}: still scans", QRScanner.decode_image(gp.generated_image.convert("RGB"),
+              thorough=False) == "https://example.com/style-tab")
+    check("end colour shown with a gradient", bool(style_tab.end_swatch.winfo_manager()))
+    style_tab.gradient_selector.set("None")
+    style_tab._gradient_picked("None")
+    wait_redraw()
+    check("end colour hidden without a gradient", not style_tab.end_swatch.winfo_manager())
+    check("style is read by current_style()", gp.current_style().module_shape == "dots"
+          and gp.current_style().eye_shape == "rounded" and gp.current_style().fg == "#0E7490")
+    # the saved/copied image is the styled one
+    check("generated image equals what the preview shows",
+          gp.generated_image.size == gp.preview_card._source.size)
+    gp.clear_form()
+    check("Clear resets the style", (style_tab.module_shape, style_tab.eye_shape, style_tab.gradient)
+          == ("square", "square", "none") and gp.color_card.get_qr_color() == "#000000"
+          and gp.generated_image is None)
+    check("Clear leaves no pending redraw", gp._refresh_job is None)
+    gp.content_card.clear()
+    gp.content_card.url_entry.insert(0, "https://example.com/layout")
+
     # ---- Save dialog ----
     original = (filedialog.asksaveasfilename, messagebox.showinfo, messagebox.showerror,
                 messagebox.showwarning)
