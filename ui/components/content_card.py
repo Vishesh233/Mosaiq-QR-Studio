@@ -1,76 +1,37 @@
 import customtkinter as ctk
 
-from utils.theme_manager import ThemeManager
-from ui.widgets import ModernEntry
-from ui.components.type_forms import FORMS, style_segmented
-from ui.widgets import ModernSegmented
+from utils import filenames
+from ui.components.type_forms import FORMS
+from ui.layout import SectionCard
+from ui.widgets import IconTileRow
 from utils.qr_payloads import TYPE_NAMES
 
+# (type name, icon, tile caption)
+TYPE_TILES = (
+    ("URL / Text", "url", "URL / Text"),
+    ("UPI Payment", "upi", "UPI"),
+    ("WiFi", "wifi", "WiFi"),
+    ("Contact", "contact", "Contact"),
+    ("Email", "email", "Email"),
+    ("SMS", "sms", "SMS"),
+)
 
-class ContentCard(ctk.CTkFrame):
+
+class ContentCard(SectionCard):
+    """Step 1: pick the QR type (icon tiles) and fill in its form."""
 
     def __init__(self, parent):
 
-        theme = ThemeManager.get_theme()
-
-        super().__init__(
-            parent,
-            fg_color=theme["card"],
-            corner_radius=16,
-            border_width=1,
-            border_color=theme["border"]
-        )
+        super().__init__(parent, title="Content", step=1)
 
         self.forms = {}
         self.active_type = TYPE_NAMES[0]
 
-        self.build_ui()
-
-    # ==================================================
-
-    def build_ui(self):
-
-        theme = ThemeManager.get_theme()
-
-        content_frame = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-
-        content_frame.pack(
-            fill="both",
-            expand=True,
-            padx=18,
-            pady=18
-        )
-
-        self.title = ctk.CTkLabel(
-            content_frame,
-            text="Content",
-            font=("Segoe UI Semibold", 16),
-            text_color=theme["text"]
-        )
-
-        self.title.pack(anchor="w")
-
-        # ---------------- Type + form ---------------- #
-
-        self.type_selector = ModernSegmented(
-            content_frame,
-            values=list(TYPE_NAMES),
-            command=self.set_type,
-            height=34
-        )
-
-        style_segmented(self.type_selector)
+        self.type_selector = IconTileRow(self.body, TYPE_TILES, command=self.set_type)
         self.type_selector.set(self.active_type)
-        self.type_selector.pack(fill="x", pady=(14, 16))
+        self.type_selector.pack(fill="x", pady=(0, 16))
 
-        self.form_holder = ctk.CTkFrame(
-            content_frame,
-            fg_color="transparent"
-        )
-
+        self.form_holder = ctk.CTkFrame(self.body, fg_color="transparent")
         self.form_holder.pack(fill="x")
 
         for name, form_class in FORMS.items():
@@ -80,53 +41,6 @@ class ContentCard(ctk.CTkFrame):
 
         # Kept for callers that fill the URL/Text box directly.
         self.url_entry = self.forms["URL / Text"].entry
-
-        # ---------------- Filename ---------------- #
-
-        self.label2 = ctk.CTkLabel(
-            content_frame,
-            text="OUTPUT FILE NAME",
-            font=("Segoe UI", 11),
-            text_color=theme["text_secondary"]
-        )
-
-        self.label2.pack(
-            anchor="w",
-            pady=(14, 5)
-        )
-
-        self.file_entry = ModernEntry(
-            content_frame,
-            placeholder="my_qr_code"
-        )
-
-        self.file_entry.pack(fill="x")
-
-    # ==================================================
-
-    def refresh_theme(self):
-
-        theme = ThemeManager.get_theme()
-
-        self.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"]
-        )
-
-        self.title.configure(
-            text_color=theme["text"]
-        )
-
-        self.label2.configure(
-            text_color=theme["text_secondary"]
-        )
-
-        style_segmented(self.type_selector)
-
-        for form in self.forms.values():
-            form.refresh_theme()
-
-        self.file_entry.refresh_theme()
 
     # ==================================================
 
@@ -143,10 +57,9 @@ class ContentCard(ctk.CTkFrame):
         """Text to encode for the selected type. Raises ValueError (user message)."""
         return self.forms[self.active_type].payload()
 
-    # ==================================================
-
-    def get_filename(self):
-        return self.file_entry.get().strip()
+    def default_filename_stem(self):
+        """Suggested name for the Save dialog, from the selected type (e.g. 'upi_qr')."""
+        return filenames.default_stem(self.active_type)
 
     # ==================================================
 
@@ -155,5 +68,12 @@ class ContentCard(ctk.CTkFrame):
         for form in self.forms.values():
             form.clear()
 
-        self.set_type(TYPE_NAMES[0])
-        self.file_entry.delete(0, "end")
+    # ==================================================
+
+    def refresh_theme(self):
+
+        super().refresh_theme()
+        self.type_selector.apply_theme()
+
+        for form in self.forms.values():
+            form.refresh_theme()

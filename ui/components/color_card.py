@@ -2,186 +2,67 @@ import customtkinter as ctk
 from tkinter.colorchooser import askcolor
 
 from utils.theme_manager import ThemeManager
-from ui import icons
 
 
 class ColorCard(ctk.CTkFrame):
+    """Colours tab of the Design card: QR colour and background colour swatches."""
+
+    DEFAULT_QR = "#000000"
+    DEFAULT_BG = "#FFFFFF"
 
     def __init__(self, parent):
 
-        theme = ThemeManager.get_theme()
+        super().__init__(parent, fg_color="transparent")
 
-        super().__init__(
-            parent,
-            fg_color=theme["card"],
-            corner_radius=16,
-            border_width=1,
-            border_color=theme["border"]
-        )
+        self.qr_color = self.DEFAULT_QR
+        self.bg_color = self.DEFAULT_BG
+        self.change_callback = None
 
-        self.qr_color = "#000000"
-        self.bg_color = "#FFFFFF"
+        self.grid_columnconfigure((0, 1), weight=1, uniform="swatch")
 
-        self.build_ui()
+        self.qr_card, self.qr_preview, self.qr_hex, self.qr_caption = self._swatch(
+            0, "qr", "QR colour · click to edit")
+        self.bg_card, self.bg_preview, self.bg_hex, self.bg_caption = self._swatch(
+            1, "bg", "Background · click to edit")
 
     # =====================================================
 
-    def build_ui(self):
+    def _swatch(self, column, color_type, caption):
 
         theme = ThemeManager.get_theme()
+        color = self.qr_color if color_type == "qr" else self.bg_color
 
-        # ---------------- Header ----------------
-
-        header = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
+        card = ctk.CTkFrame(
+            self, fg_color=theme["segment_bg"], corner_radius=11,
+            border_width=1, border_color=theme["border"],
         )
+        card.grid(row=0, column=column, sticky="ew", padx=(0, 6) if column == 0 else (6, 0))
 
-        header.pack(
-            fill="x",
-            padx=18,
-            pady=(14, 8)
+        preview = ctk.CTkFrame(
+            card, width=30, height=30, corner_radius=8,
+            border_width=1, border_color=theme["border"], fg_color=color,
         )
-
-        self.icon = ctk.CTkLabel(
-            header,
-            text=icons.icon("theme"),
-            font=icons.icon_font(16),
-            text_color=theme["primary"]
-        )
-
-        self.icon.pack(side="left")
-
-        self.title = ctk.CTkLabel(
-            header,
-            text="Color Customization",
-            font=("Segoe UI Semibold", 16),
-            text_color=theme["text"]
-        )
-
-        self.title.pack(side="left", padx=(8, 0))
-
-        # ---------------- Body ----------------
-
-        body = ctk.CTkFrame(
-            self,
-            fg_color="transparent"
-        )
-
-        body.pack(
-            fill="x",
-            padx=18,
-            pady=(0, 14)
-        )
-
-        body.grid_columnconfigure((0, 1), weight=1)
-
-        self.create_color_picker(
-            body,
-            column=0,
-            title="QR COLOR",
-            color_type="qr"
-        )
-
-        self.create_color_picker(
-            body,
-            column=1,
-            title="BACKGROUND COLOR",
-            color_type="bg"
-        )
-
-    # =====================================================
-
-    def create_color_picker(
-        self,
-        parent,
-        column,
-        title,
-        color_type
-    ):
-
-        theme = ThemeManager.get_theme()
-
-        frame = ctk.CTkFrame(
-            parent,
-            fg_color="transparent"
-        )
-
-        frame.grid(
-            row=0,
-            column=column,
-            sticky="w",
-            padx=(0, 18)
-        )
-
-        label = ctk.CTkLabel(
-            frame,
-            text=title,
-            font=("Segoe UI", 11),
-            text_color=theme["text_secondary"]
-        )
-
-        label.pack(anchor="w")
-
-        row = ctk.CTkFrame(
-            frame,
-            fg_color="transparent"
-        )
-
-        row.pack(anchor="w", pady=(6, 0))
-
-        preview = ctk.CTkButton(
-            row,
-            width=34,
-            height=34,
-            text="",
-            corner_radius=17,
-            border_width=1,
-            border_color=theme["border"],
-            fg_color=self.qr_color if color_type == "qr" else self.bg_color,
-            hover=False,
-            command=lambda: self.choose_color(color_type)
-        )
-
         # Shows the user's colour, never a theme token.
         preview._theme_skip = True
-        preview.pack(side="left")
+        preview.pack(side="left", padx=(10, 10), pady=10)
 
-        text_frame = ctk.CTkFrame(
-            row,
-            fg_color="transparent"
-        )
+        texts = ctk.CTkFrame(card, fg_color="transparent")
+        texts.pack(side="left", fill="x", pady=8)
 
-        text_frame.pack(side="left", padx=(10, 0))
-
-        hex_label = ctk.CTkLabel(
-            text_frame,
-            text=self.qr_color if color_type == "qr" else self.bg_color,
-            font=("Segoe UI Semibold", 14),
-            text_color=theme["text"]
-        )
-
+        hex_label = ctk.CTkLabel(texts, text=color, anchor="w",
+                                 font=("Segoe UI Semibold", 13), text_color=theme["text"])
         hex_label.pack(anchor="w")
+        caption_label = ctk.CTkLabel(texts, text=caption, anchor="w",
+                                     font=("Segoe UI", 11), text_color=theme["text_secondary"])
+        caption_label.pack(anchor="w")
 
-        click_label = ctk.CTkLabel(
-            text_frame,
-            text="Click to change",
-            font=("Segoe UI", 11),
-            text_color=theme["text_secondary"]
-        )
-
-        click_label.pack(anchor="w")
-
-        if color_type == "qr":
-            self.qr_preview = preview
-            self.qr_hex = hex_label
-            self.qr_label = label
-            self.qr_click = click_label
-        else:
-            self.bg_preview = preview
-            self.bg_hex = hex_label
-            self.bg_label = label
-            self.bg_click = click_label
+        for widget in (card, preview, texts, hex_label, caption_label):
+            widget.bind("<Button-1>", lambda _e, t=color_type: self.choose_color(t))
+        try:
+            card.configure(cursor="hand2")
+        except Exception:
+            pass
+        return card, preview, hex_label, caption_label
 
     # =====================================================
 
@@ -189,82 +70,48 @@ class ColorCard(ctk.CTkFrame):
 
         theme = ThemeManager.get_theme()
 
-        self.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"]
-        )
-
-        self.icon.configure(
-            text_color=theme["primary"]
-        )
-
-        self.title.configure(
-            text_color=theme["text"]
-        )
-
-        self.qr_label.configure(
-            text_color=theme["text_secondary"]
-        )
-
-        self.bg_label.configure(
-            text_color=theme["text_secondary"]
-        )
-
-        self.qr_hex.configure(
-            text_color=theme["text"]
-        )
-
-        self.bg_hex.configure(
-            text_color=theme["text"]
-        )
-
-        self.qr_click.configure(
-            text_color=theme["text_secondary"]
-        )
-
-        # Swatches are skipped by the generic re-theme (they show the
-        # user's colours); only their border follows the theme.
-        self.qr_preview.configure(border_color=theme["border"])
-        self.bg_preview.configure(border_color=theme["border"])
-
-        self.bg_click.configure(
-            text_color=theme["text_secondary"]
-        )
+        for card, preview, hex_label, caption in (
+            (self.qr_card, self.qr_preview, self.qr_hex, self.qr_caption),
+            (self.bg_card, self.bg_preview, self.bg_hex, self.bg_caption),
+        ):
+            card.configure(fg_color=theme["segment_bg"], border_color=theme["border"])
+            # The swatch shows the user's colour; only its border follows the theme.
+            preview.configure(border_color=theme["border"])
+            hex_label.configure(text_color=theme["text"])
+            caption.configure(text_color=theme["text_secondary"])
 
     # =====================================================
 
     def choose_color(self, color_type):
 
-        color = askcolor()[1]
+        current = self.qr_color if color_type == "qr" else self.bg_color
+        color = askcolor(color=current)[1]
 
         if color is None:
             return
 
         if color_type == "qr":
-
-            self.qr_color = color
-
-            self.qr_preview.configure(
-                fg_color=color
-            )
-
-            self.qr_hex.configure(
-                text=color.upper()
-            )
-
+            self.set_colors(qr=color)
         else:
-
-            self.bg_color = color
-
-            self.bg_preview.configure(
-                fg_color=color
-            )
-
-            self.bg_hex.configure(
-                text=color.upper()
-            )
+            self.set_colors(bg=color)
 
     # =====================================================
+
+    def set_colors(self, qr=None, bg=None):
+        """Show (and use) new colours; ``None`` leaves that colour as it is."""
+
+        if qr is not None:
+            self.qr_color = qr.upper()
+            self.qr_preview.configure(fg_color=self.qr_color)
+            self.qr_hex.configure(text=self.qr_color)
+
+        if bg is not None:
+            self.bg_color = bg.upper()
+            self.bg_preview.configure(fg_color=self.bg_color)
+            self.bg_hex.configure(text=self.bg_color)
+
+        if self.change_callback:
+            self.change_callback()
 
     def get_qr_color(self):
         return self.qr_color
@@ -272,25 +119,5 @@ class ColorCard(ctk.CTkFrame):
     def get_bg_color(self):
         return self.bg_color
 
-    # =====================================================
-
     def reset_colors(self):
-
-        self.qr_color = "#000000"
-        self.bg_color = "#FFFFFF"
-
-        self.qr_preview.configure(
-            fg_color=self.qr_color
-        )
-
-        self.bg_preview.configure(
-            fg_color=self.bg_color
-        )
-
-        self.qr_hex.configure(
-            text=self.qr_color
-        )
-
-        self.bg_hex.configure(
-            text=self.bg_color
-        )
+        self.set_colors(qr=self.DEFAULT_QR, bg=self.DEFAULT_BG)

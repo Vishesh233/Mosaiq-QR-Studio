@@ -5,9 +5,10 @@ from ui import icons
 
 
 class ActionButtons(ctk.CTkFrame):
+    """Generate (primary, full width) and Save / Copy / Clear under the live preview."""
 
     def __init__(self, parent):
-        
+
         super().__init__(
             parent,
             fg_color="transparent"
@@ -22,134 +23,66 @@ class ActionButtons(ctk.CTkFrame):
 
     # ==================================================
 
+    def _secondary(self, text, command, column, text_color):
+        theme = ThemeManager.get_theme()
+        button = ctk.CTkButton(
+            self,
+            text=text,
+            height=40,
+            corner_radius=11,
+            fg_color=theme["segment_bg"],
+            border_width=1,
+            border_color=theme["border"],
+            hover_color=theme["card_hover"],
+            text_color=text_color,
+            text_color_disabled=theme["text_muted"],
+            font=("Segoe UI Semibold", 13),
+            command=command,
+        )
+        button.grid(row=1, column=column, sticky="ew",
+                    padx=(0 if column == 0 else 4, 0 if column == 2 else 4), pady=(8, 0))
+        return button
+
     def build_ui(self):
         theme = ThemeManager.get_theme()
-        self.grid_columnconfigure((0, 1, 2, 3), weight=1)
-
-        # ---------------- Generate ---------------- #
+        self.grid_columnconfigure((0, 1, 2), weight=1, uniform="actions")
 
         self.generate_btn = ctk.CTkButton(
             self,
             text=f"{icons.icon('generate')}  Generate QR",
-            width=150,
-            height=48,
-            corner_radius=12,
+            height=44,
+            corner_radius=11,
             fg_color=theme["primary"],
             hover_color=theme["primary_hover"],
             text_color=theme["on_primary"],
-            font=("Segoe UI Semibold", 13),
+            font=("Segoe UI Semibold", 14),
             command=self.on_generate
         )
+        self.generate_btn.grid(row=0, column=0, columnspan=3, sticky="ew")
 
-        self.generate_btn.grid(
-            row=0,
-            column=0,
-            padx=(0, 10),
-            sticky="ew"
-        )
+        self.save_btn = self._secondary(
+            f"{icons.icon('save')}  Save", self.on_save, 0, theme["text_muted"])
+        self.copy_btn = self._secondary(
+            f"{icons.icon('copy')}  Copy", self.on_copy, 1, theme["text_muted"])
+        self.clear_btn = self._secondary(
+            f"{icons.icon('delete')}  Clear", self.on_clear, 2, theme["danger"])
 
-        # ---------------- Copy ---------------- #
-
-        self.copy_btn = ctk.CTkButton(
-            self,
-            text=f"{icons.icon('copy')}  Copy",
-            width=110,
-            height=48,
-            corner_radius=12,
-            fg_color=theme["card"],
-            border_width=1,
-            border_color=theme["border"],
-            hover_color=theme["card_hover"],
-            text_color=theme["text_muted"],
-            text_color_disabled=theme["text_muted"],
-            font=("Segoe UI Semibold", 13),
-            state="disabled",
-            command=self.on_copy
-        )
-
-        self.copy_btn.grid(
-            row=0,
-            column=1,
-            padx=(0, 10),
-            sticky="ew"
-        )
-
-        # ---------------- Save ---------------- #
-
-        self.save_btn = ctk.CTkButton(
-            self,
-            text=f"{icons.icon('save')}  Save As",
-            width=120,
-            height=48,
-            corner_radius=12,
-            fg_color=theme["card"],
-            border_width=1,
-            border_color=theme["border"],
-            hover_color=theme["card_hover"],
-            text_color=theme["text_muted"],
-            text_color_disabled=theme["text_muted"],
-            font=("Segoe UI Semibold", 13),
-            state="disabled",
-            command=self.on_save
-        )
-
-        self.save_btn.grid(
-            row=0,
-            column=2,
-            padx=(0, 10),
-            sticky="ew"
-        )
-
-        # ---------------- Clear ---------------- #
-
-        self.clear_btn = ctk.CTkButton(
-            self,
-            text=f"{icons.icon('delete')}  Clear",
-            width=110,
-            height=48,
-            corner_radius=12,
-            fg_color="transparent",
-            border_width=1,
-            border_color=theme["border"],
-            hover_color=theme["card_hover"],
-            text_color=theme["danger"],
-            font=("Segoe UI Semibold", 13),
-            command=self.on_clear
-        )
-
-        self.clear_btn.grid(
-            row=0,
-            column=3,
-            sticky="ew"
-        )
+        self.save_btn.configure(state="disabled")
+        self.copy_btn.configure(state="disabled")
 
     # ==================================================
 
     def enable_export_buttons(self):
 
-        self.copy_btn.configure(
-            state="normal",
-            text_color=ThemeManager.get_theme()["text"]
-        )
-
-        self.save_btn.configure(
-            state="normal",
-            text_color=ThemeManager.get_theme()["text"]
-        )
+        for button in (self.save_btn, self.copy_btn):
+            button.configure(state="normal", text_color=ThemeManager.get_theme()["text"])
 
     # ==================================================
 
     def disable_export_buttons(self):
 
-        self.copy_btn.configure(
-            state="disabled",
-            text_color=ThemeManager.get_theme()["text_muted"]
-        )
-
-        self.save_btn.configure(
-            state="disabled",
-            text_color=ThemeManager.get_theme()["text_muted"]
-        )
+        for button in (self.save_btn, self.copy_btn):
+            button.configure(state="disabled", text_color=ThemeManager.get_theme()["text_muted"])
 
     def refresh_theme(self):
 
@@ -161,34 +94,20 @@ class ActionButtons(ctk.CTkFrame):
             text_color=theme["on_primary"]
         )
 
-        self.copy_btn.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"],
-            hover_color=theme["card_hover"]
-        )
+        for button in (self.save_btn, self.copy_btn, self.clear_btn):
+            button.configure(
+                fg_color=theme["segment_bg"],
+                border_color=theme["border"],
+                hover_color=theme["card_hover"],
+                text_color_disabled=theme["text_muted"],
+            )
 
-        self.save_btn.configure(
-            fg_color=theme["card"],
-            border_color=theme["border"],
-            hover_color=theme["card_hover"]
-        )
+        self.clear_btn.configure(text_color=theme["danger"])
 
-        self.clear_btn.configure(
-            border_color=theme["border"],
-            hover_color=theme["card_hover"],
-            text_color=theme["danger"]
-        )
-
-        # Preserve enabled/disabled text colors
-        if str(self.copy_btn.cget("state")) == "disabled":
-            self.copy_btn.configure(text_color=theme["text_muted"])
-        else:
-            self.copy_btn.configure(text_color=theme["text"])
-
-        if str(self.save_btn.cget("state")) == "disabled":
-            self.save_btn.configure(text_color=theme["text_muted"])
-        else:
-            self.save_btn.configure(text_color=theme["text"])
+        # Keep the enabled / disabled text colours.
+        for button in (self.save_btn, self.copy_btn):
+            disabled = str(button.cget("state")) == "disabled"
+            button.configure(text_color=theme["text_muted"] if disabled else theme["text"])
 
     # ==================================================
 

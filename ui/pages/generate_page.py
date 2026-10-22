@@ -1,16 +1,14 @@
 import customtkinter as ctk
 
-from ui.layout import CARD_GAP, TwoColumnPage
 from ui.components.content_card import ContentCard
+from ui.components.design_card import DesignCard
 from ui.components.preview_card import PreviewCard
-from ui.components.logo_card import LogoCard
-from ui.components.color_card import ColorCard
-from ui.components.action_buttons import ActionButtons
+from ui.layout import CARD_GAP, TwoColumnPage
+from utils import filenames
 from utils.qr_generator import QRGenerator
 from utils.clipboard import ClipboardManager
 from tkinter import messagebox
 from tkinter import filedialog
-
 
 
 class GeneratePage(TwoColumnPage):
@@ -22,27 +20,24 @@ class GeneratePage(TwoColumnPage):
         self.generator = QRGenerator()
         self.generated_image = None
 
-        # Left column (scrolls)
+        # Left column (scrolls): step 1 and step 2
         self.content_card = ContentCard(self.left)
         self.content_card.pack(fill="x", pady=(0, CARD_GAP))
 
-        self.logo_card = LogoCard(self.left)
-        self.logo_card.pack(fill="x", pady=(0, CARD_GAP))
+        self.design_card = DesignCard(self.left)
+        self.design_card.pack(fill="x")
+        self.color_card = self.design_card.colours
+        self.logo_card = self.design_card.logo
 
-        self.color_card = ColorCard(self.left)
-        self.color_card.pack(fill="x", pady=(0, CARD_GAP))
-
-        self.action_buttons = ActionButtons(self.left)
-        self.action_buttons.pack(fill="x")
+        # Right column (stays put): live preview with the buttons under it
+        self.preview_card = PreviewCard(self.right)
+        self.preview_card.pack(fill="both", expand=True)
+        self.action_buttons = self.preview_card.actions
 
         self.action_buttons.set_generate_callback(self.generate_qr)
         self.action_buttons.set_clear_callback(self.clear_form)
         self.action_buttons.set_copy_callback(self.copy_qr)
         self.action_buttons.set_save_callback(self.save_qr)
-
-        # Right column (stays put)
-        self.preview_card = PreviewCard(self.right)
-        self.preview_card.pack(fill="both", expand=True)
 
     def generate_qr(self):
 
@@ -134,17 +129,9 @@ class GeneratePage(TwoColumnPage):
             )
             return
 
-        filename = self.content_card.get_filename()
-
-        if not filename:
-            filename = "qr_code"
-
-        if filename.lower().endswith(".png"):
-            filename = filename[:-4]
-
         filepath = filedialog.asksaveasfilename(
             title="Save QR Code",
-            initialfile=f"{filename}.png",
+            initialfile=f"{self.content_card.default_filename_stem()}.png",
             defaultextension=".png",
             filetypes=[
                 ("PNG Image", "*.png")
@@ -153,6 +140,8 @@ class GeneratePage(TwoColumnPage):
 
         if not filepath:
             return
+
+        filepath = filenames.with_extension(filepath, ".png")
 
         try:
 
@@ -173,18 +162,6 @@ class GeneratePage(TwoColumnPage):
     def refresh_theme(self):
 
         super().refresh_theme()
-
-        if hasattr(self.content_card, "refresh_theme"):
-            self.content_card.refresh_theme()
-
-        if hasattr(self.logo_card, "refresh_theme"):
-            self.logo_card.refresh_theme()
-
-        if hasattr(self.color_card, "refresh_theme"):
-            self.color_card.refresh_theme()
-
-        if hasattr(self.action_buttons, "refresh_theme"):
-            self.action_buttons.refresh_theme()
-
-        if hasattr(self.preview_card, "refresh_theme"):
-            self.preview_card.refresh_theme()
+        self.content_card.refresh_theme()
+        self.design_card.refresh_theme()
+        self.preview_card.refresh_theme()
