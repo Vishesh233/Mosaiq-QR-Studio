@@ -129,7 +129,7 @@ def main():
         problems.append("invalid UPI ID was not rejected with a warning")
     cc.clear()
 
-    # --- Scan result card: readable smart results, safe actions, error state ---
+    # --- Scan result card: readable smart results, button sets, safe actions, no clipping ---
     import webbrowser
     app.show_scan_page()
     root.update_idletasks()
@@ -137,46 +137,110 @@ def main():
     opened = []
     original_open = webbrowser.open
     webbrowser.open = lambda url, *a, **k: opened.append(url)
+
+    def buttons():
+        """(primary text, secondary text or None) as shown."""
+        second = rc.action_btn.cget("text") if rc.action_btn.winfo_ismapped() else None
+        return rc.copy_btn.cget("text"), second
+
+    def card_fits(label):
+        root.update_idletasks()
+        root.update()
+        card_bottom = rc.winfo_rooty() + rc.winfo_height()
+        tips_bottom = rc.tips_frame.winfo_rooty() + rc.tips_frame.winfo_height()
+        if tips_bottom > card_bottom:
+            problems.append(f"{label}: TIPS card is cut off ({tips_bottom - card_bottom}px past the card)")
+        for button in (rc.copy_btn, rc.action_btn):
+            if button.winfo_ismapped() and button.winfo_rooty() + button.winfo_height() > card_bottom:
+                problems.append(f"{label}: a button is cut off")
+
+    def expect(label, text, primary, secondary, *, opens=None, primary_copies=None, secondary_copies=None):
+        rc.set_result(text)
+        card_fits(label)
+        got = buttons()
+        if primary not in got[0] or (secondary is None) != (got[1] is None) \
+                or (secondary is not None and secondary not in got[1]):
+            problems.append(f"{label}: buttons are {got!r}, expected {primary!r} / {secondary!r}")
+            return
+        if got[1] is not None and got[0] == got[1]:
+            problems.append(f"{label}: both buttons say the same thing: {got!r}")
+        # Press them and look at what really happens.
+        del opened[:]
+        rc.clipboard_clear()
+        rc.copy_btn.invoke()
+        root.update_idletasks()
+        clip = None
+        try:
+            clip = rc.clipboard_get()
+        except Exception:
+            clip = None                      # nothing was copied
+        if primary_copies is None and clip not in (None, ""):
+            problems.append(f"{label}: primary should not copy but clipboard has {clip!r}")
+        if primary_copies is not None and clip != primary_copies:
+            problems.append(f"{label}: primary copied {clip!r}, expected {primary_copies!r}")
+        if (opens is None) != (not opened) or (opens is not None and opened != [opens]):
+            problems.append(f"{label}: browser opened {opened!r}, expected {opens!r}")
+        if secondary is not None:
+            del opened[:]
+            rc.clipboard_clear()
+            rc.action_btn.invoke()
+            root.update_idletasks()
+            try:
+                clip = rc.clipboard_get()
+            except Exception:
+                clip = None
+            if clip != secondary_copies:
+                problems.append(f"{label}: secondary copied {clip!r}, expected {secondary_copies!r}")
+            if opened:
+                problems.append(f"{label}: copy button opened a browser: {opened!r}")
+            if primary_copies is not None and primary_copies == secondary_copies:
+                problems.append(f"{label}: both buttons copy the same value")
+
     try:
         upi = qr_payloads.build_upi("shop@okaxis", "Corner Shop", "99.50", "Order")
-        rc.set_result(upi)
-        root.update_idletasks()
+        expect("UPI", upi, "Copy UPI ID", "Copy raw text", primary_copies="shop@okaxis", secondary_copies=upi)
         label = rc.result_label.cget("text")
         if "Corner Shop" not in label or "shop@okaxis" not in label or "INR 99.50" not in label:
             problems.append(f"UPI result not readable: {label!r}")
-        if rc.action != ("Copy UPI ID", "shop@okaxis"):
-            problems.append(f"UPI action wrong: {rc.action!r}")
-        rc.open_result()
         rc.result_label.event_generate("<Button-1>")
+        rc.icon.event_generate("<Button-1>")
         root.update_idletasks()
         if opened:
-            problems.append(f"UPI result tried to open something: {opened!r}")
-        rc.on_copy_action()
-        if rc.clipboard_get() != "shop@okaxis":
-            problems.append("Copy UPI ID did not copy the UPI ID")
-        rc.on_copy()
-        if rc.clipboard_get() != upi:
-            problems.append("Copy Raw Text did not copy the raw payload")
+            problems.append(f"UPI result tried to open something when clicked: {opened!r}")
 
-        rc.set_result(qr_payloads.build_wifi("MyNetwork", "secret-pass1", "WPA"))
-        if "WiFi: MyNetwork" not in rc.result_label.cget("text") or rc.action != ("Copy password", "secret-pass1"):
-            problems.append("WiFi result not shown as expected")
+        wifi = qr_payloads.build_wifi("MyNetwork", "secret-pass1", "WPA")
+        expect("WiFi", wifi, "Copy password", "Copy raw text", primary_copies="secret-pass1", secondary_copies=wifi)
+        if "WiFi: MyNetwork" not in rc.result_label.cget("text"):
+            problems.append("WiFi result not shown as 'WiFi: MyNetwork'")
+        openwifi = qr_payloads.build_wifi("CafeFree", "", "None")
+        expect("WiFi open network", openwifi, "Copy raw text", None, primary_copies=openwifi)
 
-        rc.set_result("www.example.com")
-        rc.open_result()
-        if opened != ["https://www.example.com"]:
-            problems.append(f"www link did not open as https: {opened!r}")
+        card = qr_payloads.build_vcard("Asha Verma", "+91 98765 43210", "asha@example.com", "Mosaiq")
+        expect("Contact", card, "Copy phone", "Copy raw text", primary_copies="+919876543210", secondary_copies=card)
+        nophone = qr_payloads.build_vcard("Asha Verma", "", "asha@example.com", "")
+        expect("Contact without phone", nophone, "Copy raw text", None, primary_copies=nophone)
 
-        rc.set_result("hello world")
-        if rc.action is not None or rc.tips_frame.winfo_manager() == "":
-            problems.append("plain text should have no action and show tips")
+        mail = qr_payloads.build_email("hi@example.com", "Hello", "Body text")
+        expect("Email", mail, "Copy address", "Copy raw text", primary_copies="hi@example.com", secondary_copies=mail)
+        sms = qr_payloads.build_sms("+919876543210", "On my way")
+        expect("SMS", sms, "Copy number", "Copy raw text", primary_copies="+919876543210", secondary_copies=sms)
+
+        url = "https://example.com/a?b=c"
+        expect("URL", url, "Open link", "Copy link", opens=url, secondary_copies=url)
+        expect("www link", "www.example.com", "Open link", "Copy link",
+               opens="https://www.example.com", secondary_copies="www.example.com")
+        expect("Plain text", "hello world", "Copy Result", None, primary_copies="hello world")
+        long_text = "word " * 120
+        expect("Very long text", long_text.strip(), "Copy Result", None, primary_copies=long_text.strip())
 
         rc.set_message("No QR code found")
-        if str(rc.copy_btn.cget("state")) != "disabled" or rc.action is not None:
-            problems.append("error state should disable copy buttons")
+        card_fits("error state")
+        if str(rc.copy_btn.cget("state")) != "disabled" or rc.action_btn.winfo_ismapped():
+            problems.append("error state should disable the copy button and hide the second one")
         rc.set_result("")
-        if rc.result != "":
-            problems.append("empty result did not clear")
+        card_fits("empty state")
+        if rc.result != "" or rc.copy_btn.cget("text").strip().split("  ")[-1] != "Copy Result":
+            problems.append("empty result did not clear to the disabled generic button")
     finally:
         webbrowser.open = original_open
     app.show_generate_page()
@@ -188,7 +252,7 @@ def main():
     from utils.clipboard import ClipboardManager
 
     def set_clipboard_text(text):
-        win32clipboard.OpenClipboard()
+        ClipboardManager._open()
         try:
             win32clipboard.EmptyClipboard()
             win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
@@ -196,7 +260,7 @@ def main():
             win32clipboard.CloseClipboard()
 
     def empty_clipboard():
-        win32clipboard.OpenClipboard()
+        ClipboardManager._open()
         try:
             win32clipboard.EmptyClipboard()
         finally:
@@ -212,26 +276,26 @@ def main():
     if rc.result != wifi_text or not sp.upload_card.has_content:
         problems.append("clipboard image was not scanned into the result panel")
 
-    # Synthetic key events and the shared Windows clipboard depend on what else
-    # is running on the desktop, so allow a few attempts before calling it a failure.
-    for attempt in range(3):
-        rc.clear()
-        ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
-        root.focus_force(); root.update()
-        root.event_generate("<Control-v>")
-        root.update()
-        if rc.result == "https://example.com/ctrl-v":
-            break
-    else:
+    # The Ctrl+V binding is registered on the window; its handler is called directly
+    # because a synthetic key event needs real keyboard focus, which a hidden test
+    # window does not have.
+    bound = str(root.tk.call("bind", str(root)))      # Tk spells it <Control-Key-v>
+    if "<Control-Key-v>" not in bound and "<Control-v>" not in bound:
+        problems.append("Ctrl+V is not bound on the main window")
+    rc.clear()
+    ClipboardManager.copy_image(QRGenerator().generate("https://example.com/ctrl-v"))
+    sp._on_ctrl_v()
+    root.update()
+    if rc.result != "https://example.com/ctrl-v":
         problems.append(
             "Ctrl+V on the scan page did not paste the clipboard image "
-            f"(3 attempts; panel says {rc.result_label.cget('text')!r})"
+            f"(panel says {rc.result_label.cget('text')!r})"
         )
 
     app.show_generate_page()
     root.update_idletasks()
     rc.clear()
-    root.event_generate("<Control-v>")
+    sp._on_ctrl_v()          # same handler, Scan page hidden: must do nothing
     root.update()
     if rc.result:
         problems.append("Ctrl+V scanned while the Generate page was showing")

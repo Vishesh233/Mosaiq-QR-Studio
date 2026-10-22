@@ -1,3 +1,4 @@
+import time
 from io import BytesIO
 
 from PIL import Image
@@ -21,7 +22,7 @@ class ClipboardManager:
 
         output.close()
 
-        win32clipboard.OpenClipboard()
+        ClipboardManager._open()
 
         try:
             win32clipboard.EmptyClipboard()
@@ -31,3 +32,17 @@ class ClipboardManager:
             )
         finally:
             win32clipboard.CloseClipboard()
+
+    @staticmethod
+    def _open(attempts=20, pause=0.05):
+        """OpenClipboard, retrying: another program (clipboard manager, remote
+        desktop) may hold the clipboard for a moment. Raises after ~1 s."""
+
+        for attempt in range(attempts):
+            try:
+                win32clipboard.OpenClipboard()
+                return
+            except win32clipboard.error:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(pause)

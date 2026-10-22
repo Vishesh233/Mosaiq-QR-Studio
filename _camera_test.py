@@ -19,6 +19,7 @@ os.environ["QRSTUDIO_NO_SPLASH"] = "1"
 import cv2
 import numpy as np
 
+import _test_samples as samples
 from utils.camera_scanner import CameraError, CameraScanner, CvFrameSource
 from utils.qr_generator import QRGenerator
 
@@ -101,6 +102,40 @@ def test_scanner():
           str(source.release_thread))
     check("found: thread finished", not scanner.active)
 
+    # --- the hard case from real use: a phone in dark mode (light-on-dark, dotted
+    #     modules, logo, blur) seen by the camera; only one recipe runs per frame ---
+    upi = "upi://pay?pa=someone@okhdfcbank&pn=Some%20Shop&mc=0000&mode=02&purpose=00"
+    for inverted, style, sigma in ((True, "dots", 1.2), (True, "square", 1.2), (True, "dots", 1.8), (False, "dots", 1.2)):
+        qr = samples.render_qr(upi, inverted=inverted, style=style, logo=True)
+        frames = [blank_frame((1280, 720))] * 3 + [samples.camera_frame(qr, seed=i, sigma=sigma) for i in range(6)]
+        source = FakeSource(frames, delay=0.033)            # a 30 fps camera
+        scanner = CameraScanner(source_factory=lambda: source)
+        started = time.time()
+        scanner.start()
+        events = collect(scanner, timeout=10)
+        took = time.time() - started
+        tag = f"{'light-on-dark' if inverted else 'dark-on-light'} {style} blur {sigma}"
+        check(f"hard camera[{tag}]: found", ("found", upi) in events, str(kinds(events)))
+        check(f"hard camera[{tag}]: released", source.released)
+        print(f"[camera] {tag}: found after {took:.2f} s ({source.index} frames read)")
+
+    # --- the preview keeps its frame rate while decoding fails on every attempt ---
+    qr = samples.render_qr(upi, inverted=True, style="dots", logo=True)
+    hopeless = samples.camera_frame(qr, seed=1, sigma=4.5)      # too blurry to ever decode
+    source = FakeSource([hopeless], delay=0.02)
+    scanner = CameraScanner(source_factory=lambda: source)
+    scanner.start()
+    shown = 0
+    end = time.time() + 3.0
+    while time.time() < end:
+        frame, _ = scanner.poll()
+        shown += frame is not None
+        time.sleep(0.01)
+    scanner.stop()
+    print(f"[camera] preview while decoding never succeeds: {shown / 3.0:.0f} fps polled")
+    check("preview stays smooth while the decoder works (>= 15 fps)", shown / 3.0 >= 15, f"{shown / 3.0:.1f} fps")
+    check("preview+decoder threads released", source.released and not scanner.active)
+
     # --- Stop while streaming: released, idempotent ---
     source = FakeSource([blank_frame()])
     scanner = CameraScanner(source_factory=lambda: source)
@@ -144,7 +179,7 @@ def test_scanner():
     check("black frames: released", source.released)
 
     # --- unexpected exception in decoding: reported, still released ---
-    def broken_decode(frame, thorough=True):
+    def broken_decode(frame, **kwargs):
         raise RuntimeError("decoder exploded")
 
     source = FakeSource([blank_frame()])
@@ -255,6 +290,8 @@ def test_ui():
     frames_before = None
     pump(2.5)
     check("ui: preview image updates", uc.camera_image is not None)
+    hint = uc.camera_status.cget("text")
+    check("ui: camera hint shown", "Tip: hold the QR steady, 15–25 cm from the camera." in hint, repr(hint))
     frames_before = source.index
     done[0] = True
     pump(0.1)

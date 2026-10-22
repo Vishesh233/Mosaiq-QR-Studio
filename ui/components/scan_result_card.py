@@ -18,15 +18,13 @@ class ScanResultCard(ctk.CTkFrame):
             border_width=1,
             fg_color=theme["card"],
             border_color=theme["border"],
-            width=380,
-            height=520
+            width=380
         )
-
-        self.pack_propagate(False)
 
         self.result = ""
         self.copy_callback = None
         self.action = None
+        self.button_plan = []
 
         self.build_ui()
 
@@ -34,6 +32,13 @@ class ScanResultCard(ctk.CTkFrame):
 
     def build_ui(self):
         theme = ThemeManager.get_theme()
+
+        # The card's height follows its content (nothing is ever cut off, in
+        # any state); this empty strip keeps the width at 380 px.
+        self.width_keeper = ctk.CTkFrame(
+            self, width=340, height=0, fg_color="transparent"
+        )
+        self.width_keeper.pack(padx=20)
 
         # ----------------------------
         # Title
@@ -184,7 +189,6 @@ class ScanResultCard(ctk.CTkFrame):
         # ----------------------------
 
         self.copy_label = f"{icons.icon('copy')}  Copy Result"
-        self.copy_raw_label = f"{icons.icon('copy')}  Copy Raw Text"
 
         self.copy_btn = ctk.CTkButton(
             self,
@@ -198,7 +202,7 @@ class ScanResultCard(ctk.CTkFrame):
             border_color=theme["border"],
             text_color=theme["on_primary"],
             state="disabled",
-            command=self.on_copy,
+            command=lambda: self._press(0),
             font=("Segoe UI Semibold", 14)
         )
 
@@ -222,7 +226,7 @@ class ScanResultCard(ctk.CTkFrame):
             border_color=theme["border"],
             text_color=theme["primary"],
             font=("Segoe UI Semibold", 13),
-            command=self.on_copy_action
+            command=lambda: self._press(1)
         )
 
         self.divider2 = ctk.CTkFrame(
@@ -273,7 +277,7 @@ class ScanResultCard(ctk.CTkFrame):
             "Avoid cropped or blurry images"
         ]
 
-        for tip in tips:
+        for index, tip in enumerate(tips):
 
             row = ctk.CTkFrame(
                 self.tips_frame,
@@ -283,7 +287,7 @@ class ScanResultCard(ctk.CTkFrame):
             row.pack(
                 anchor="w",
                 padx=16,
-                pady=1
+                pady=(1, 12 if index == len(tips) - 1 else 1)
             )
 
             bullet = ctk.CTkLabel(
@@ -379,13 +383,8 @@ class ScanResultCard(ctk.CTkFrame):
         # Buttons (the app never launches UPI or any other app by itself)
         # ----------------------------
 
-        self.copy_btn.configure(
-            state="normal",
-            text=self.copy_raw_label if smart else self.copy_label
-        )
-        self._style_copy_btn()
-        self._set_action(parsed.action)
-        self._show_tips(not smart)
+        self._set_buttons(self._plan_buttons(parsed))
+        self.action = parsed.action if smart else None   # the specific copy value
 
     # ==================================================
 
@@ -411,46 +410,78 @@ class ScanResultCard(ctk.CTkFrame):
 
     # ==================================================
 
-    def _set_action(self, action):
+    def _plan_buttons(self, parsed):
+        """The buttons for a result: [(label, action, copies)], at most two.
 
-        self.action = action
+        Every button does something different, and the generic "Copy Result"
+        exists only when there is no more specific copy button:
+          link    Open link, Copy link
+          text    Copy Result
+          smart   the specific value (Copy UPI ID, Copy password, ...), Copy raw text
+                  (just Copy raw text when the code has no specific value)
+        """
+        raw = self.result
+        copy = icons.icon("copy")
 
-        if action is None:
+        if parsed.kind == "url":
+            return [
+                (f"{icons.icon('open')}  Open link", self.open_result, False),
+                (f"{copy}  Copy link", lambda: self._copy(raw.strip()), True),
+            ]
+
+        if parsed.kind == "text":
+            return [(f"{copy}  Copy Result", lambda: self._copy(raw), True)]
+
+        plan = []
+        if parsed.action:
+            label, value = parsed.action
+            plan.append((f"{copy}  {label}", lambda: self._copy(value), True))
+        plan.append((f"{copy}  Copy raw text", lambda: self._copy(raw), True))
+        return plan
+
+    def _set_buttons(self, plan):
+        """Show up to two buttons; the first is the primary one."""
+
+        self.button_plan = plan
+        self.action = None
+
+        if not plan:
+            self.copy_btn.configure(state="disabled", text=self.copy_label)
+            self._style_copy_btn()
             self.action_btn.pack_forget()
             return
 
-        self.action_btn.configure(text=f"{icons.icon('copy')}  {action[0]}")
+        self.copy_btn.configure(state="normal", text=plan[0][0])
+        self._style_copy_btn()
 
-        if not self.action_btn.winfo_ismapped():
-            self.action_btn.pack(after=self.copy_btn, pady=(0, 14))
-
-    def _show_tips(self, visible):
-
-        if visible:
-            if not self.tips_frame.winfo_ismapped():
-                self.tips_frame.pack(
-                    after=self.divider2,
-                    fill="x",
-                    padx=20,
-                    pady=(0, 12)
-                )
+        if len(plan) > 1:
+            self.action_btn.configure(text=plan[1][0])
+            if not self.action_btn.winfo_ismapped():
+                self.action_btn.pack(after=self.copy_btn, pady=(0, 14))
         else:
-            self.tips_frame.pack_forget()
+            self.action_btn.pack_forget()
+
+    def _copy(self, value):
+        self.clipboard_clear()
+        self.clipboard_append(value)
+
+    def _press(self, index):
+        """A result button was clicked."""
+
+        if index >= len(self.button_plan):
+            return
+
+        label, action, copies = self.button_plan[index]
+        action()
+
+        if copies:
+            button = self.copy_btn if index == 0 else self.action_btn
+            self._flash(button, label)
 
     def _flash(self, button, original_text):
         """Briefly confirm a copy on the button itself."""
         button.configure(text="Copied")
         self.after(1200, lambda: button.configure(text=original_text))
-
-    def on_copy_action(self):
-
-        if self.action is None:
-            return
-
-        label, value = self.action
-        self.clipboard_clear()
-        self.clipboard_append(value)
-        self._flash(self.action_btn, f"{icons.icon('copy')}  {label}")
 
     # ==================================================
 
@@ -509,13 +540,7 @@ class ScanResultCard(ctk.CTkFrame):
             height=128
         )
 
-        self.copy_btn.configure(
-            state="disabled",
-            text=self.copy_label
-        )
-        self._style_copy_btn()
-        self._set_action(None)
-        self._show_tips(True)
+        self._set_buttons([])
 
         self.result_label.unbind("<Button-1>")
         self.icon.unbind("<Button-1>")
@@ -543,15 +568,6 @@ class ScanResultCard(ctk.CTkFrame):
         self.copy_callback = callback
 
     # ==================================================
-
-    def on_copy(self):
-
-        if not self.result:
-            return
-
-        self.clipboard_clear()
-        self.clipboard_append(self.result)
-        self._flash(self.copy_btn, self.copy_btn.cget("text"))
 
     def refresh_theme(self):
 

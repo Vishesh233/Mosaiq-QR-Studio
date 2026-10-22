@@ -21,7 +21,8 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 - **Clipboard**: *Paste* (or Ctrl+V) scans an image you copied, e.g. with the Windows Snipping Tool (Win + Shift + S)
 - **Screen region**: *Screen Region* hides the window, freezes the screen and lets you drag a box around a QR code
 - Recognises UPI, WiFi, contact, email and SMS codes and shows them readably (for example "WiFi: MyNetwork"), with a copy button for the useful value and one for the raw text. Scanning never starts a payment or joins a network by itself.
-- Links are detected and open in your browser with one click
+- Reads dark-mode (light-on-dark) codes, dotted-module codes with a logo, and blurred webcam pictures: several decoding recipes (OpenCV's QR detectors, inverted, adaptive threshold, sharpened) are tried, and the live camera cycles through them one per frame so the preview stays smooth
+- Links get **Open link** (default browser) and **Copy link**; every result has only buttons that do different things
 
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)

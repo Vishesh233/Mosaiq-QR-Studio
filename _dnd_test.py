@@ -153,7 +153,15 @@ def real_drop(paths, target_xy):
     (0 = nobody accepted the drop).
     """
     clipboard_files(paths)
-    data = pythoncom.OleGetClipboard()
+    for attempt in range(20):
+        try:
+            data = pythoncom.OleGetClipboard()
+            break
+        except pythoncom.com_error:
+            # Another program holds the shared clipboard for a moment.
+            if attempt == 19:
+                raise
+            time.sleep(0.1)
     source = wrap(DropSource(), pythoncom.IID_IDropSource)
 
     size = 60

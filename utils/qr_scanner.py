@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -5,6 +7,52 @@ from PIL import Image
 
 class ScanError(Exception):
     """The input could not be read as an image (not the same as "no QR in it")."""
+
+
+# ----------------------------------------------------------------------
+# Decoding recipes. Real-world QR codes are often light-on-dark (dark-mode
+# payment apps), blurred (a webcam looking at a phone) or drawn with dotted
+# modules, and OpenCV's default detector only handles dark-on-light. Each
+# recipe is (name, preparation, detector); the detector returns the text.
+# ----------------------------------------------------------------------
+
+def _invert(gray):
+    return cv2.bitwise_not(gray)
+
+
+def _sharpen(gray):
+    blurred = cv2.GaussianBlur(gray, (0, 0), 3)
+    return cv2.addWeighted(gray, 2.0, blurred, -1.0, 0)
+
+
+def _adaptive(gray):
+    # The block size follows the image so it spans roughly one QR module row.
+    block = max(21, (max(gray.shape[:2]) // 32) | 1)
+    return cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, block, 8
+    )
+
+
+def _plain(gray):
+    return gray
+
+
+RECIPES = (
+    # (name, prepare, detector)  -- ordered by how often they win and how cheap they are
+    ("aruco", _plain, "aruco"),
+    ("aruco inverted", _invert, "aruco"),
+    ("threshold inverted", lambda g: _adaptive(_invert(g)), "classic"),
+    ("threshold", _adaptive, "classic"),
+    ("aruco inverted sharpened", lambda g: _sharpen(_invert(g)), "aruco"),
+    ("aruco sharpened", _sharpen, "aruco"),
+    ("classic", _plain, "classic"),
+    ("classic inverted", _invert, "classic"),
+)
+
+# Recipes a live camera cycles through (the slow "classic" ones are left out).
+CAMERA_RECIPES = 6
+
+_reported = set()
 
 
 class QRScanner:
@@ -30,23 +78,65 @@ class QRScanner:
         return QRScanner.decode_image(image)
 
     @staticmethod
-    def decode_image(image, thorough=True):
+    def decode_image(image, thorough=True, variant=None, budget=6.0):
         """Decode a QR code from a PIL image or a BGR/grayscale ndarray.
 
-        thorough=False tries the frame as-is only (used per camera frame).
+        thorough=True   tries every recipe on several versions of the image
+                        (stills: files, clipboard, screen region).
+        variant=n       tries only recipe n (modulo CAMERA_RECIPES); a camera
+                        loop passes a counter so each frame costs one attempt.
+        budget          seconds a thorough scan may take before giving up (a
+                        picture with QR-like patterns that never decode can
+                        make every recipe slow).
         Returns the text, or None when no QR code is found.
         """
         gray = QRScanner._to_gray(image)
-        detector = cv2.QRCodeDetector()
+        deadline = time.perf_counter() + budget
 
-        for candidate in QRScanner._candidates(gray, thorough):
-            data, points, _ = detector.detectAndDecode(candidate)
-            if points is not None and data:
-                return data
+        if variant is not None:
+            recipes = [RECIPES[variant % CAMERA_RECIPES]]
+            images = [gray]
+        elif thorough:
+            recipes = RECIPES
+            images = QRScanner._candidates(gray)
+        else:
+            recipes = RECIPES[:1]
+            images = [gray]
+
+        detectors = {}
+
+        for candidate in images:
+            for name, prepare, kind in recipes:
+                if time.perf_counter() > deadline:
+                    return None
+                if kind not in detectors:
+                    detectors[kind] = (
+                        cv2.QRCodeDetectorAruco() if kind == "aruco"
+                        else cv2.QRCodeDetector()
+                    )
+                text = QRScanner._try(name, prepare, detectors[kind], candidate)
+                if text:
+                    return text
 
         return None
 
     # ==================================================
+
+    @staticmethod
+    def _try(name, prepare, detector, gray):
+
+        try:
+            data, points, _ = detector.detectAndDecode(prepare(gray))
+        except cv2.error as e:
+            # OpenCV raises on some degenerate inputs; that only means this
+            # recipe found nothing. Say so once per message, never silently.
+            message = str(e).strip().splitlines()[-1][:120]
+            if (name, message) not in _reported:
+                _reported.add((name, message))
+                print(f"[QRScanner] {name}: {message}")
+            return None
+
+        return data if data and points is not None else None
 
     @staticmethod
     def _to_gray(image):
@@ -66,21 +156,23 @@ class QRScanner:
         return image
 
     @staticmethod
-    def _candidates(gray, thorough):
+    def _candidates(gray):
+        """The image itself, then versions that help hard cases."""
 
         yield gray
-
-        if not thorough:
-            return
 
         height, width = gray.shape[:2]
         longest = max(height, width)
 
-        # A quiet zone is required; screenshots are often cropped tight.
+        # A quiet zone is required; screenshots are often cropped tight. Pad
+        # with white (dark-on-light codes) and with black (light-on-dark).
+        # (Skipped for very large images, where it only adds seconds.)
         pad = max(20, longest // 8)
-        yield cv2.copyMakeBorder(
-            gray, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255
-        )
+        for shade in (255, 0):
+            if longest <= 2000:
+                yield cv2.copyMakeBorder(
+                    gray, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=shade
+                )
 
         if longest < 1000:
             yield cv2.resize(
@@ -92,8 +184,3 @@ class QRScanner:
             yield cv2.resize(
                 gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA
             )
-
-        _, binary = cv2.threshold(
-            gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-        )
-        yield binary

@@ -337,7 +337,7 @@ class ScanUploadCard(ctk.CTkFrame):
             return
 
         frame = Image.fromarray(rgb)
-        frame.thumbnail((440, 260))
+        frame.thumbnail((440, 250))
 
         self.camera_image = ctk.CTkImage(
             light_image=frame,

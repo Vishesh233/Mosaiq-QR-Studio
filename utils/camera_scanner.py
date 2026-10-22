@@ -1,8 +1,10 @@
 """Live QR scanning from a webcam.
 
-The camera is opened, read, decoded and released on ONE worker thread; the UI
-thread only calls start()/stop()/poll(), so the interface never waits on the
-camera. Tk widgets are never touched from the worker.
+The camera is opened, read and released on ONE worker thread, which also feeds
+the preview at the camera's frame rate. A second thread decodes the newest frame,
+one recipe per attempt, cycling through them (a single attempt costs 50-150 ms,
+so trying everything on every frame would stall the preview). The UI thread only
+calls start()/stop()/poll(); Tk widgets are never touched from the workers.
 """
 
 import queue
@@ -82,7 +84,6 @@ class CameraScanner:
         ("stopped", None)   always the last event; the camera is released
     """
 
-    DECODE_EVERY = 3                 # frames; decoding every frame is wasteful
     BLACK_FRAMES_BEFORE_ERROR = 45   # ~1.5 s of pure black (blocked or covered)
 
     def __init__(self, source_factory=CvFrameSource.open,
@@ -94,6 +95,10 @@ class CameraScanner:
         self.thread = None
         self.latest = None
         self.lock = threading.Lock()
+        self._raw = (0, None)          # (frame number, newest full-size frame)
+        self._decoder = None
+        self.found = threading.Event()
+        self.decoder_error = None
 
     # ==================================================
 
@@ -108,6 +113,8 @@ class CameraScanner:
 
         self.stop_event.clear()
         self.latest = None
+        self._raw = (0, None)
+        self.decoder_error = None
         self.events = queue.Queue()
         self.thread = threading.Thread(
             target=self._run, name="camera-scanner", daemon=True
@@ -158,6 +165,7 @@ class CameraScanner:
             self.events.put(("error", f"The camera stopped unexpectedly: {e}"))
 
         finally:
+            self._stop_decoder()
             if source is not None:
                 try:
                     source.release()
@@ -170,8 +178,13 @@ class CameraScanner:
         frames = 0
         failed_reads = 0
         black_frames = 0
+        self.found = threading.Event()
+        self._decoder = threading.Thread(
+            target=self._decode_loop, name="camera-decoder", daemon=True
+        )
+        self._decoder.start()
 
-        while not self.stop_event.is_set():
+        while not self.stop_event.is_set() and not self.found.is_set():
 
             ok, frame = source.read()
 
@@ -197,13 +210,56 @@ class CameraScanner:
             else:
                 black_frames = 0
 
+            with self.lock:
+                self._raw = (frames, frame)
+
             self._publish_preview(frame)
 
-            if frames % self.DECODE_EVERY == 0:
-                text = self.decode(frame, thorough=False)
-                if text:
-                    self.events.put(("found", text))
-                    return
+        self._stop_decoder()
+
+        if self.decoder_error is not None:
+            raise self.decoder_error
+
+    def _decode_loop(self):
+        """Decode thread: newest frame, next recipe, repeat until found or stopped."""
+
+        attempt = 0
+        last_frame = 0
+
+        while not self.stop_event.is_set() and not self.found.is_set():
+
+            with self.lock:
+                number, frame = self._raw
+
+            if frame is None or number == last_frame:
+                time.sleep(0.005)
+                continue
+
+            last_frame = number
+
+            try:
+                text = self.decode(frame, variant=attempt)
+            except Exception as e:
+                traceback.print_exc()
+                self.decoder_error = e
+                self.found.set()
+                return
+
+            attempt += 1
+
+            if text:
+                self.events.put(("found", text))
+                self.found.set()
+                return
+
+    def _stop_decoder(self):
+
+        decoder = self._decoder
+        self._decoder = None
+
+        if decoder is not None:
+            self.found.set()             # wakes its loop whatever the reason
+            decoder.join(timeout=3.0)
 
     def _publish_preview(self, frame):
 

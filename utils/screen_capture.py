@@ -2,6 +2,7 @@
 
 import ctypes
 import os
+import time
 
 from PIL import Image, ImageGrab
 
@@ -18,10 +19,16 @@ def grab_clipboard_image():
     Handles a copied bitmap (Snipping Tool, Print Screen, "Copy image") and an
     image file copied in Explorer. Raises ClipboardImageError otherwise.
     """
-    try:
-        data = ImageGrab.grabclipboard()
-    except OSError as e:
-        raise ClipboardImageError(f"Could not read the clipboard: {e}") from e
+    data = None
+    for attempt in range(5):
+        try:
+            data = ImageGrab.grabclipboard()
+            break
+        except OSError as e:
+            # Another program may hold the clipboard for a moment; retry briefly.
+            if attempt == 4:
+                raise ClipboardImageError(f"Could not read the clipboard: {e}") from e
+            time.sleep(0.1)
 
     if isinstance(data, Image.Image):
         return data

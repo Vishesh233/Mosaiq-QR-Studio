@@ -178,7 +178,8 @@ class ScanPage(ctk.CTkFrame):
 
             if kind == "running":
                 self.upload_card.set_camera_status(
-                    "Hold a QR code in front of the camera."
+                    "Hold a QR code in front of the camera.\n"
+                    "Tip: hold the QR steady, 15–25 cm from the camera."
                 )
 
             elif kind == "found":

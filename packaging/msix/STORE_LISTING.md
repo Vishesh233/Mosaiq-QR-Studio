@@ -106,8 +106,10 @@ needed.
 
 Scan with your webcam, paste an image from the clipboard, select a region of your screen or
 drag an image onto the window. New QR types with their own forms: UPI payment, WiFi, contact,
-email and SMS, and scanned codes of these types are shown in a readable form. Better
-reading of cropped or small QR images, and clearer messages when an image cannot be read.
+email and SMS, and scanned codes of these types are shown in a readable form. Reads
+light-on-dark (dark mode) and dotted QR codes, blurred webcam pictures and tightly cropped
+images, and shows clear messages when an image cannot be read. Scanned links now have
+"Open link" and "Copy link" buttons.
 
 ### Search terms (7)
 
