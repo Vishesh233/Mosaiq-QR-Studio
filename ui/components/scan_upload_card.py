@@ -27,6 +27,7 @@ class ScanUploadCard(ctk.CTkFrame):
         self.preview_image = None
         self.preview_label = None
         self.upload_callback = None
+        self.idle_subtitle = "Click to browse"
 
         self.build_ui()
 
@@ -180,7 +181,7 @@ class ScanUploadCard(ctk.CTkFrame):
 
         self.subtitle = ctk.CTkLabel(
             self.placeholder,
-            text="Click to browse",
+            text=self.idle_subtitle,
             font=("Segoe UI", 12),
             text_color=theme["text_secondary"]
         )
@@ -390,12 +391,30 @@ class ScanUploadCard(ctk.CTkFrame):
         if not path:
             return
 
+        self.load_path(path)
+
+    # ======================================================
+
+    def load_path(self, path):
+        """Use an image file (chosen in the dialog or dropped onto the card)."""
+
         self.image_path = path
 
         self.show_preview()
 
         if self.upload_callback:
             self.upload_callback(path)
+
+    def set_drop_hint(self, enabled):
+        """Mention drag & drop in the idle text when it is available."""
+
+        self.idle_subtitle = (
+            "Click to browse, or drop an image here" if enabled
+            else "Click to browse"
+        )
+
+        if not self.has_content and not self.camera_visible:
+            self.subtitle.configure(text=self.idle_subtitle)
 
     # ======================================================
 
@@ -531,7 +550,7 @@ class ScanUploadCard(ctk.CTkFrame):
         )
 
         self.subtitle.configure(
-            text="Click to browse"
+            text=self.idle_subtitle
         )
 
         self.browse_button.configure(

@@ -10,6 +10,7 @@ from utils.qr_scanner import QRScanner, ScanError
 from PIL import Image
 
 from ui.region_selector import RegionSelector
+from utils.screen_capture import IMAGE_EXTENSIONS
 from utils.camera_scanner import CameraScanner, CvFrameSource
 from utils.screen_capture import (
     ClipboardImageError, grab_clipboard_image, grab_virtual_screen
@@ -40,6 +41,7 @@ class ScanPage(ctk.CTkFrame):
         )
         self.region_selector = None
         self._window_state = "normal"
+        self.drop_enabled = False
 
         # Camera: the scanner runs on its own thread; poll_id is the after() id
         # of the UI-side poll. camera_factory exists so tests can supply a fake.
@@ -244,6 +246,50 @@ class ScanPage(ctk.CTkFrame):
     def shutdown(self):
         """The app is closing."""
         self.stop_camera()
+
+    # ==================================================
+    # Drag & drop
+    # ==================================================
+
+    def enable_drop(self, unavailable_reason):
+        """Accept image files dropped on this page (None = drag & drop works)."""
+
+        self.drop_enabled = unavailable_reason is None
+        self.upload_card.set_drop_hint(self.drop_enabled)
+
+        if not self.drop_enabled:
+            return
+
+        from tkinterdnd2 import DND_FILES
+
+        # OLE hands a drop to the nearest registered parent window, so one
+        # registration covers every widget on the page, including ones
+        # created later (preview, camera view).
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind("<<Drop>>", self._on_drop)
+
+    def _on_drop(self, event):
+
+        paths = self.winfo_toplevel().tk.splitlist(event.data)
+        self.scan_dropped_files(list(paths))
+        return event.action
+
+    def scan_dropped_files(self, paths):
+
+        images = [
+            p for p in paths
+            if os.path.splitext(p)[1].lower() in IMAGE_EXTENSIONS
+        ]
+
+        if not images:
+            self.stop_camera()
+            self.result_card.set_message(
+                "That is not an image file. Drop a PNG, JPG, WEBP or BMP."
+            )
+            return
+
+        self.stop_camera()
+        self.upload_card.load_path(images[0])
 
     def _on_ctrl_v(self, event=None):
 

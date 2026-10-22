@@ -72,6 +72,11 @@ for _pkg in (
 ):
     _collect_all(_pkg)
 
+# ---- tkinterdnd2 (drag & drop of image files onto the Scan page): the stock
+#      PyInstaller hook (pyinstaller-hooks-contrib) bundles only the win-x64
+#      tkdnd library + .tcl files (~0.3 MB). ui/dnd_support.py imports it
+#      optionally, so the app still starts if it were ever missing. ----
+
 # ---- qrcode: image backends are chosen via a factory and are NOT auto-detected ----
 hiddenimports += collect_submodules("qrcode")
 hiddenimports += [
@@ -106,7 +111,8 @@ hiddenimports = [h for h in hiddenimports
 def _keep(entry):
     """Drop files only needed to build or type-check, and the video plugin."""
     dest = entry[0].replace("\\", "/").lower()
-    if "opencv_videoio_ffmpeg" in dest:      # FFmpeg video I/O (~29 MB): stills only
+    if "opencv_videoio_ffmpeg" in dest:      # FFmpeg video I/O (~29 MB): the webcam uses
+                                             # DirectShow / Media Foundation built into cv2
         return False
     if dest.rsplit("/", 1)[-1].startswith("pythoncom"):   # COM runtime DLL, unused
         return False

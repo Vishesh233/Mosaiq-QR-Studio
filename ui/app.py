@@ -7,6 +7,7 @@ from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
 from ui.splash import Splash, splash_disabled
 from ui.brand_logo import apply_window_icon
+from ui.dnd_support import create_root
 
 from config import (
     APP_NAME,
@@ -56,7 +57,8 @@ class QRCodeStudioApp:
         # Window
         # ==========================
 
-        self.root = ctk.CTk()
+        # dnd_error is None when files can be dropped onto the Scan page.
+        self.root, self.dnd_error = create_root()
         self.root.title(APP_NAME)
         apply_window_icon(self.root)
         self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
@@ -104,6 +106,7 @@ class QRCodeStudioApp:
 
         self.generate_page = GeneratePage(self.body)
         self.scan_page = ScanPage(self.body)
+        self.scan_page.enable_drop(self.dnd_error)
 
         self.generate_page.pack(fill="both", expand=True, padx=28, pady=(10, 25))
 
