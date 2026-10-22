@@ -44,5 +44,8 @@
     <!-- Desktop (Win32) apps run with full trust; Partner Center asks for a
          one-line justification for this restricted capability. -->
     <rescap:Capability Name="runFullTrust" />
+    <!-- Live QR scanning from the webcam (Scan tab > Use Camera). The camera is
+         opened only while that view is showing; frames stay in memory. -->
+    <DeviceCapability Name="webcam" />
   </Capabilities>
 </Package>

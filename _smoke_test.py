@@ -275,6 +275,24 @@ def main():
     app.show_generate_page()
     root.update_idletasks()
 
+    # --- Release metadata: version, manifest capability, sidebar label agree ---
+    import json
+    import xml.etree.ElementTree as ET
+    import config
+    ident = json.load(open(os.path.join("packaging", "msix", "identity.json"), encoding="utf-8"))
+    if ident["Version"] != "2.1.0.0" or config.APP_VERSION != "v2.1":
+        problems.append(f"version mismatch: identity {ident['Version']} / config {config.APP_VERSION}")
+    manifest_text = open(os.path.join("packaging", "msix", "AppxManifest.xml.in"), encoding="utf-8").read()
+    for key in ("IdentityName", "Publisher", "PublisherDisplayName", "DisplayName", "Version"):
+        manifest_text = manifest_text.replace("@@" + key + "@@", ident[key])
+    manifest = ET.fromstring(manifest_text)
+    ns = {"m": "http://schemas.microsoft.com/appx/manifest/foundation/windows10"}
+    caps = {c.get("Name") for c in manifest.findall("m:Capabilities/m:DeviceCapability", ns)}
+    if caps != {"webcam"}:
+        problems.append(f"manifest DeviceCapability should be exactly webcam, got {caps}")
+    if manifest.find("m:Identity", ns).get("Version") != "2.1.0.0":
+        problems.append("manifest identity version is not 2.1.0.0")
+
     # --- Settings dialog opens and closes cleanly ---
     from ui.dialogs.settings_dialog import SettingsDialog
     dlg = SettingsDialog(app.header)

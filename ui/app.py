@@ -37,7 +37,7 @@ class QRCodeStudioApp:
         ),
         "scan": (
             "Scan QR Code",
-            "Decode a QR code from an image file.",
+            "Decode a QR code from an image, the camera, the clipboard or the screen.",
         ),
     }
 

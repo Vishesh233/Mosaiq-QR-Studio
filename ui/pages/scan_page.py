@@ -80,8 +80,8 @@ class ScanPage(ctk.CTkFrame):
             hero_wrapper,
             title="Scan a QR code",
             subtitle=(
-                "Upload or paste an image to decode links, text, "
-                "UPI, WiFi, contacts, email and SMS."
+                "Upload, paste or drop an image, or use your camera, to "
+                "decode links, text, UPI, WiFi, contacts, email and SMS."
             ),
             
         )

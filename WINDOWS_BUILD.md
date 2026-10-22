@@ -23,10 +23,11 @@ Imported at runtime:
 
 - `customtkinter` — GUI (ships its own `assets/` with fonts, icons, themes → **must be bundled**)
 - `PIL` (Pillow) — image generation / previews
-- `cv2` (OpenCV) — QR **scanning** via `cv2.QRCodeDetector()`
+- `cv2` (OpenCV) — QR **scanning** via `cv2.QRCodeDetector()`, and the webcam (`cv2.VideoCapture`, DirectShow / Media Foundation built into `cv2`)
 - `numpy` — OpenCV dependency
 - `qrcode` — QR generation (image backend chosen via factory → **hidden imports required**)
 - `win32clipboard` (pywin32) — copy QR to Windows clipboard
+- `tkinterdnd2` — optional drag and drop of image files onto the Scan page (PyInstaller's stock hook bundles only the win-x64 tkdnd library, about 0.3 MB; if it fails to load, the app runs without drop support)
 - `darkdetect` — used by CustomTkinter
 - `colorama`, `packaging` — transitive deps
 
@@ -121,6 +122,15 @@ Manual test checklist:
 - [ ] **Scan:** switch to Scan → upload a QR image (e.g. a PNG you just saved) →
       decoded URL/text is shown.
 - [ ] **Scan link:** clicking a decoded `http(s)` URL opens the browser.
+- [ ] **Smart types:** generate a UPI, WiFi, Contact, Email and SMS code; scan each back and
+      check it reads "UPI payment: …", "WiFi: …" and so on. Scanning UPI must not open any app.
+- [ ] **Camera:** Scan → Use Camera → hold a QR code up; the result appears and the camera
+      light goes off. Also check Stop, switching to Generate, and closing the app with the
+      camera running (the light must go off each time).
+- [ ] **Drag and drop:** drag a PNG from File Explorer onto the Scan page.
+- [ ] **Paste:** copy a QR with Snipping Tool (Win + Shift + S) → Scan → Paste (or Ctrl+V).
+- [ ] **Screen Region:** Scan → Screen Region → drag around a QR code on screen; try at
+      100%, 125% and 150% display scaling (Settings → System → Display).
 - [ ] **Intro:** the full-screen splash plays, then the maximized main window appears.
 - [ ] **Themes:** Settings ⚙ → pick a theme from the gallery (Midnight … Daylight) → Apply.
 
@@ -195,7 +205,8 @@ Smart App Control warnings.
    `makeappx` / `makepri` are downloaded once into `.tools\` (no Windows SDK needed).
    Logo assets are rendered from `ui/brand_logo.py` by `packaging\msix\make_assets.py`.
 3. Upload the `.msix` under **Packages** in the submission. Do not sign it; the Store does.
-   `runFullTrust` asks for a one-line justification (it is a desktop app).
+   `runFullTrust` asks for a one-line justification (it is a desktop app). The manifest
+   also declares the `webcam` capability (live scanning); see `packaging\msix\STORE_LISTING.md`.
 4. Raise `Version` in `identity.json` for every new upload (the last part stays `0`).
 
 Test the Store-signed build through a private audience before making the listing public.

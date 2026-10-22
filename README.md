@@ -8,15 +8,20 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ## Features
 
 ### Generate
-- QR codes from any URL or text
+- QR codes from a URL or text, or from a small form for each smart type:
+  **UPI payment** (UPI ID, payee, optional amount and note), **WiFi** (SSID, password, WPA/WEP/none, hidden),
+  **Contact** (vCard 3.0), **Email** (`mailto:`) and **SMS** (`SMSTO:`)
 - Custom QR and background colours
 - Your logo in the centre (high error correction, so the code still scans)
 - Live preview, then save as PNG or copy it to the clipboard
 
 ### Scan
-- Decode a QR code from an image file (PNG, JPG/JPEG, WEBP, BMP) picked with the file browser; there is no webcam scanning
+- **Webcam**: *Use Camera* shows a live preview and decodes the first QR code it sees; it stops itself, and releases the camera on Stop, tab change or exit
+- **Image file**: Browse, or **drag and drop** an image onto the Scan page (PNG, JPG/JPEG, WEBP, BMP)
+- **Clipboard**: *Paste* (or Ctrl+V) scans an image you copied, e.g. with the Windows Snipping Tool (Win + Shift + S)
+- **Screen region**: *Screen Region* hides the window, freezes the screen and lets you drag a box around a QR code
+- Recognises UPI, WiFi, contact, email and SMS codes and shows them readably (for example "WiFi: MyNetwork"), with a copy button for the useful value and one for the raw text. Scanning never starts a payment or joins a network by itself.
 - Links are detected and open in your browser with one click
-- Copy the decoded text
 
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
@@ -46,6 +51,19 @@ python -m venv .venv
 
 To skip the intro, run `main.py --no-splash` or set `QRSTUDIO_NO_SPLASH=1`.
 
+## Tests
+
+Run from the repository root with the venv's Python (they open real windows; the drag-and-drop test moves the mouse by itself for a few seconds):
+
+| Script | Covers |
+|---|---|
+| `_roundtrip_test.py` | every QR type: build, generate, scan, parse; scanner edge cases |
+| `_smoke_test.py` | the UI: navigation, all six generate forms, scan results, clipboard, settings, themes |
+| `_func_test.py` | generate, scan and clipboard without the UI |
+| `_region_test.py` | screen-region overlay, crop mapping, window restore |
+| `_camera_test.py` | webcam thread, fake and real camera, release on stop, tab change and exit |
+| `_dnd_test.py` | drag and drop fallback, and real OLE drops (needs `tkinterdnd2`) |
+
 ## Build
 
 | Output | Command |
@@ -57,7 +75,7 @@ Details, test checklist and release steps are in [WINDOWS_BUILD.md](WINDOWS_BUIL
 
 ## Tech stack
 
-Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCodeDetector`) · qrcode · pywin32 (clipboard) · PyInstaller · MSIX
+Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCodeDetector`, webcam) · qrcode · pywin32 (clipboard) · tkinterdnd2 (drag and drop, optional) · PyInstaller · MSIX
 
 ## Project structure
 
@@ -67,7 +85,7 @@ Mosaiq-QR-Studio/
 ├── ui/                  # app shell, pages, components, settings dialog
 │   ├── splash.py        # animated intro (NumPy renderer)
 │   └── brand_logo.py    # logo and app icon, drawn in code
-├── utils/               # QR generator, scanner, clipboard, themes, settings
+├── utils/               # QR generator, payload types, scanner, camera, screen capture, clipboard, themes, settings
 ├── reference/           # intro data: QR matrix and wordmark font
 ├── assets/              # app icon, screenshots, thumbnails
 ├── packaging/msix/      # Store manifest, identity, logo assets, listing text
@@ -78,7 +96,6 @@ Mosaiq-QR-Studio/
 
 ## Roadmap
 
-- Webcam scanning
 - History of generated and scanned codes
 - Batch generation
 
