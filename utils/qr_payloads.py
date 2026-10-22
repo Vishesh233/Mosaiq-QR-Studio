@@ -362,7 +362,7 @@ def parse(text):
                 return parsed
             break
 
-    if re.match(r"^https?://\S+$", stripped, re.IGNORECASE):
+    if re.match(r"^(https?://|www\.)\S+$", stripped, re.IGNORECASE):
         return ParsedQR("url", "URL detected", [], text, ("Copy link", stripped))
 
     return ParsedQR("text", "Plain text", [], text)

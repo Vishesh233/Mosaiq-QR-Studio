@@ -128,6 +128,59 @@ def main():
         problems.append("invalid UPI ID was not rejected with a warning")
     cc.clear()
 
+    # --- Scan result card: readable smart results, safe actions, error state ---
+    import webbrowser
+    app.show_scan_page()
+    root.update_idletasks()
+    rc = app.scan_page.result_card
+    opened = []
+    original_open = webbrowser.open
+    webbrowser.open = lambda url, *a, **k: opened.append(url)
+    try:
+        upi = qr_payloads.build_upi("shop@okaxis", "Corner Shop", "99.50", "Order")
+        rc.set_result(upi)
+        root.update_idletasks()
+        label = rc.result_label.cget("text")
+        if "Corner Shop" not in label or "shop@okaxis" not in label or "INR 99.50" not in label:
+            problems.append(f"UPI result not readable: {label!r}")
+        if rc.action != ("Copy UPI ID", "shop@okaxis"):
+            problems.append(f"UPI action wrong: {rc.action!r}")
+        rc.open_result()
+        rc.result_label.event_generate("<Button-1>")
+        root.update_idletasks()
+        if opened:
+            problems.append(f"UPI result tried to open something: {opened!r}")
+        rc.on_copy_action()
+        if rc.clipboard_get() != "shop@okaxis":
+            problems.append("Copy UPI ID did not copy the UPI ID")
+        rc.on_copy()
+        if rc.clipboard_get() != upi:
+            problems.append("Copy Raw Text did not copy the raw payload")
+
+        rc.set_result(qr_payloads.build_wifi("MyNetwork", "secret-pass1", "WPA"))
+        if "WiFi: MyNetwork" not in rc.result_label.cget("text") or rc.action != ("Copy password", "secret-pass1"):
+            problems.append("WiFi result not shown as expected")
+
+        rc.set_result("www.example.com")
+        rc.open_result()
+        if opened != ["https://www.example.com"]:
+            problems.append(f"www link did not open as https: {opened!r}")
+
+        rc.set_result("hello world")
+        if rc.action is not None or rc.tips_frame.winfo_manager() == "":
+            problems.append("plain text should have no action and show tips")
+
+        rc.set_message("No QR code found")
+        if str(rc.copy_btn.cget("state")) != "disabled" or rc.action is not None:
+            problems.append("error state should disable copy buttons")
+        rc.set_result("")
+        if rc.result != "":
+            problems.append("empty result did not clear")
+    finally:
+        webbrowser.open = original_open
+    app.show_generate_page()
+    root.update_idletasks()
+
     # --- Settings dialog opens and closes cleanly ---
     from ui.dialogs.settings_dialog import SettingsDialog
     dlg = SettingsDialog(app.header)

@@ -4,6 +4,7 @@ import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
 from ui import icons
+from utils import qr_payloads
 
 
 class ScanResultCard(ctk.CTkFrame):
@@ -25,6 +26,7 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.result = ""
         self.copy_callback = None
+        self.action = None
 
         self.build_ui()
 
@@ -181,9 +183,12 @@ class ScanResultCard(ctk.CTkFrame):
         # Copy Button
         # ----------------------------
 
+        self.copy_label = f"{icons.icon('copy')}  Copy Result"
+        self.copy_raw_label = f"{icons.icon('copy')}  Copy Raw Text"
+
         self.copy_btn = ctk.CTkButton(
             self,
-            text=f"{icons.icon('copy')}  Copy Result",
+            text=self.copy_label,
             width=200,
             height=46,
             corner_radius=12,
@@ -202,6 +207,23 @@ class ScanResultCard(ctk.CTkFrame):
             pady=(18, 16)
         )
         self._style_copy_btn()
+
+        # Extra copy button for smart types (UPI ID, WiFi password, ...);
+        # packed only when the scanned code has such a value.
+        self.action_btn = ctk.CTkButton(
+            self,
+            text="",
+            width=200,
+            height=40,
+            corner_radius=12,
+            border_width=1,
+            fg_color="transparent",
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["primary"],
+            font=("Segoe UI Semibold", 13),
+            command=self.on_copy_action
+        )
 
         self.divider2 = ctk.CTkFrame(
             self,
@@ -287,6 +309,17 @@ class ScanResultCard(ctk.CTkFrame):
 
     # ==================================================
 
+    # Chip label and icon per recognised kind.
+    KIND_CHIPS = {
+        "url": ("link", "URL Detected"),
+        "text": ("text", "Plain Text"),
+        "upi": ("text", "UPI Payment"),
+        "wifi": ("text", "WiFi Network"),
+        "contact": ("text", "Contact"),
+        "email": ("text", "Email"),
+        "sms": ("text", "SMS"),
+    }
+
     def set_result(self, text):
 
         self.result = text.strip()
@@ -295,77 +328,129 @@ class ScanResultCard(ctk.CTkFrame):
             self.clear()
             return
 
+        parsed = qr_payloads.parse(self.result)
+        is_url = parsed.kind == "url"
+        smart = parsed.kind not in ("url", "text")
         theme = ThemeManager.get_theme()
 
-        is_url = (
-            "www." in self.result.lower()
-            or self.result.lower().startswith(("http://", "https://"))
-        )
-
         # ----------------------------
-        # Result Text
+        # Result Text (smart types show their readable fields)
         # ----------------------------
 
         self.result_label.configure(
-            text= self.result,
-            text_color=theme["primary"],
-            cursor="hand2"
-)
+            text=parsed.readable if smart else self.result,
+            text_color=theme["primary"] if is_url else theme["text"],
+            cursor="hand2" if is_url else "arrow"
+        )
+
+        self.result_box.configure(
+            height=min(260, 70 + 24 * (1 + len(parsed.fields))) if smart else 128
+        )
 
         # ----------------------------
-        # Icon
+        # Icon + Status Chip
         # ----------------------------
+
+        icon_name, chip_text = self.KIND_CHIPS[parsed.kind]
 
         self.icon.configure(
-            text=icons.icon("link") if is_url else icons.icon("text"),
+            text=icons.icon(icon_name),
             text_color=theme["primary"] if is_url else theme["text"]
         )
 
-        # ----------------------------
-        # Status Chip
-        # ----------------------------
+        self.status_chip.configure(
+            text=f"{icons.icon(icon_name)}  {chip_text}",
+            fg_color=theme["card_hover"],
+            text_color=theme["primary"] if is_url else theme["text"]
+        )
+
+        self.result_box.configure(
+            border_color=theme["primary"] if (is_url or smart) else theme["border"]
+        )
 
         if is_url:
-
-            self.status_chip.configure(
-                text=f"{icons.icon('link')}  URL Detected",
-                fg_color=theme["card_hover"],
-                text_color=theme["primary"]
-            )
-
-            self.result_box.configure(
-                border_color=theme["primary"]
-            )
-
-            self.result_label.bind(
-                "<Button-1>",
-                self.open_result
-            )
-
-            self.icon.bind(
-                "<Button-1>",
-                self.open_result
-            )
-
+            self.result_label.bind("<Button-1>", self.open_result)
+            self.icon.bind("<Button-1>", self.open_result)
         else:
-
-            self.status_chip.configure(
-                text=f"{icons.icon('text')}  Plain Text",
-                fg_color=theme["card_hover"],
-                text_color=theme["text"]
-            )
-
-            self.result_box.configure(
-                border_color=theme["border"]
-            )
-
             self.result_label.unbind("<Button-1>")
             self.icon.unbind("<Button-1>")
 
+        # ----------------------------
+        # Buttons (the app never launches UPI or any other app by itself)
+        # ----------------------------
+
         self.copy_btn.configure(
-            state="normal"
+            state="normal",
+            text=self.copy_raw_label if smart else self.copy_label
         )
         self._style_copy_btn()
+        self._set_action(parsed.action)
+        self._show_tips(not smart)
+
+    # ==================================================
+
+    def set_message(self, text):
+        """Show a problem (no QR found, unreadable file) instead of a result."""
+
+        self.clear()
+
+        theme = ThemeManager.get_theme()
+
+        self.result_label.configure(
+            text=text,
+            text_color=theme["text_secondary"]
+        )
+
+        self.status_chip.configure(
+            text="Nothing decoded",
+            fg_color=theme["entry"],
+            text_color=theme["danger"]
+        )
+
+        self.result_box.configure(border_color=theme["danger"])
+
+    # ==================================================
+
+    def _set_action(self, action):
+
+        self.action = action
+
+        if action is None:
+            self.action_btn.pack_forget()
+            return
+
+        self.action_btn.configure(text=f"{icons.icon('copy')}  {action[0]}")
+
+        if not self.action_btn.winfo_ismapped():
+            self.action_btn.pack(after=self.copy_btn, pady=(0, 14))
+
+    def _show_tips(self, visible):
+
+        if visible:
+            if not self.tips_frame.winfo_ismapped():
+                self.tips_frame.pack(
+                    after=self.divider2,
+                    fill="x",
+                    padx=20,
+                    pady=(0, 12)
+                )
+        else:
+            self.tips_frame.pack_forget()
+
+    def _flash(self, button, original_text):
+        """Briefly confirm a copy on the button itself."""
+        button.configure(text="Copied")
+        self.after(1200, lambda: button.configure(text=original_text))
+
+    def on_copy_action(self):
+
+        if self.action is None:
+            return
+
+        label, value = self.action
+        self.clipboard_clear()
+        self.clipboard_append(value)
+        self._flash(self.action_btn, f"{icons.icon('copy')}  {label}")
 
     # ==================================================
 
@@ -420,13 +505,17 @@ class ScanResultCard(ctk.CTkFrame):
         )
 
         self.result_box.configure(
-            border_color=theme["border"]
+            border_color=theme["border"],
+            height=128
         )
 
         self.copy_btn.configure(
-            state="disabled"
+            state="disabled",
+            text=self.copy_label
         )
         self._style_copy_btn()
+        self._set_action(None)
+        self._show_tips(True)
 
         self.result_label.unbind("<Button-1>")
         self.icon.unbind("<Button-1>")
@@ -462,6 +551,7 @@ class ScanResultCard(ctk.CTkFrame):
 
         self.clipboard_clear()
         self.clipboard_append(self.result)
+        self._flash(self.copy_btn, self.copy_btn.cget("text"))
 
     def refresh_theme(self):
 
@@ -500,6 +590,12 @@ class ScanResultCard(ctk.CTkFrame):
             label.configure(text_color=theme["text_secondary"])
 
         self._style_copy_btn()
+
+        self.action_btn.configure(
+            hover_color=theme["card_hover"],
+            border_color=theme["border"],
+            text_color=theme["primary"]
+        )
 
         if not self.result:
             self.status_chip.configure(

@@ -178,6 +178,7 @@ def test_sms():
 def test_plain():
     url = P.parse(roundtrip("https://example.com/a?b=c&d=e"))
     check("plain: url", url.kind == "url")
+    check("plain: www link", P.parse("www.example.com").kind == "url")
     txt = P.parse(roundtrip("just some text"))
     check("plain: text", txt.kind == "text" and txt.raw == "just some text")
     broken = P.parse("WIFI:garbage")

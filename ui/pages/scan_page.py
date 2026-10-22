@@ -95,13 +95,16 @@ class ScanPage(ctk.CTkFrame):
         try:
             result = QRScanner.decode(image_path)
         except ScanError as e:
-            self.result_card.set_result(str(e))
+            self.result_card.set_message(str(e))
             return
 
         if result:
             self.result_card.set_result(result)
         else:
-            self.result_card.set_result("No QR code found")
+            self.result_card.set_message(
+                "No QR code found in this image. Try a sharper or "
+                "closer picture."
+            )
 
     def refresh_theme(self):
 
