@@ -1,6 +1,5 @@
 import customtkinter as ctk
-from tkinter.colorchooser import askcolor
-
+from ui.dialogs.color_picker import pick_color
 from utils.theme_manager import ThemeManager
 
 
@@ -85,7 +84,8 @@ class ColorCard(ctk.CTkFrame):
     def choose_color(self, color_type):
 
         current = self.qr_color if color_type == "qr" else self.bg_color
-        color = askcolor(color=current)[1]
+        title = "QR colour" if color_type == "qr" else "Background colour"
+        color = pick_color(self, current, title)
 
         if color is None:
             return

@@ -61,6 +61,22 @@ def _one(theme, outdir):
     capture_window(win32gui.GetAncestor(dlg.winfo_id(), 2)).save(
         os.path.join(outdir, f"{theme}-settings.png"))
     dlg.destroy()
+
+    # Colour picker, with a few recent colours so that row is visible.
+    from ui.dialogs.color_picker import ColorPickerDialog
+    from utils import colors
+
+    for color in ("#7C2D12", "#0E7490", "#1E3A8A", "#15803D"):
+        colors.remember(color)
+    picker = ColorPickerDialog(app.header, "#0E7490", "QR colour")
+    picker.geometry("+120+60")
+    end = time.time() + 1.0
+    while time.time() < end:
+        root.update()
+        time.sleep(0.02)
+    capture_window(win32gui.GetAncestor(picker.winfo_id(), 2)).save(
+        os.path.join(outdir, f"{theme}-picker.png"))
+    picker.cancel()
     app.close()
 
 

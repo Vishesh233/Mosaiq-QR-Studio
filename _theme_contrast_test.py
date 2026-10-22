@@ -166,13 +166,15 @@ def check_widgets(problems):
         json.dump({"theme": "Midnight", "splash_enabled": False}, fh)
 
     from ui.app import QRCodeStudioApp
+    from ui.dialogs.color_picker import ColorPickerDialog
     from ui.dialogs.settings_dialog import SettingsDialog
     from utils.theme_manager import ThemeManager
 
     app = QRCodeStudioApp()
     root = app.root
-    root.withdraw()
-    root.update_idletasks()
+    # Parked off-screen (not withdrawn): dialogs of a withdrawn window never become visible.
+    root.geometry("1280x820+-30000+-30000")
+    root.update()
     names = ThemeManager.get_theme_names()
 
     def pages():
@@ -214,6 +216,11 @@ def check_widgets(problems):
         root.update_idletasks()
         audit_tree(dlg, name, "settings", problems)
         dlg.destroy()
+        root.update_idletasks()
+        picker = ColorPickerDialog(app.header, "#0E7490", "audit")
+        root.update_idletasks()
+        audit_tree(picker, name, "colour picker", problems)
+        picker.destroy()
         root.update_idletasks()
 
     app.close()

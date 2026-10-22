@@ -34,9 +34,9 @@ class ClipboardManager:
             win32clipboard.CloseClipboard()
 
     @staticmethod
-    def _open(attempts=20, pause=0.05):
+    def _open(attempts=40, pause=0.05):
         """OpenClipboard, retrying: another program (clipboard manager, remote
-        desktop) may hold the clipboard for a moment. Raises after ~1 s."""
+        desktop) may hold the clipboard for a moment. Raises after ~2 s."""
 
         for attempt in range(attempts):
             try:
