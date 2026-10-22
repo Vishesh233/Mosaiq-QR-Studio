@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mosaiq UI Mockup</title>
+<style>
+:root{
+  --bg:#070b0f; --side:#0a1016; --card:#0e161d; --card2:#111c24; --line:#1b2a33;
+  --text:#e6f1f3; --muted:#8aa3ab; --acc:#22d3ee; --acc2:#5eead4; --accInk:#04252c;
+  --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#04070a;color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;padding:24px 16px}
+h1.page{font-size:18px;color:var(--muted);font-weight:500;margin:0 0 6px}
+.switch{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+.switch button{background:var(--card);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;cursor:pointer;font:inherit}
+.switch button.on{background:var(--acc);color:var(--accInk);border-color:var(--acc);font-weight:600}
+.win{max-width:1280px;margin:0 auto;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);display:grid;grid-template-columns:220px 1fr;min-height:760px}
+/* sidebar */
+.side{background:var(--side);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column}
+.brand{display:flex;gap:10px;align-items:center;margin-bottom:28px}
+.logo{width:38px;height:38px;border-radius:10px;background:conic-gradient(from 200deg,var(--acc),var(--acc2),#818cf8,var(--acc));display:grid;place-items:center}
+.logo i{width:22px;height:22px;background:repeating-linear-gradient(90deg,#04252c 0 4px,transparent 4px 7px),repeating-linear-gradient(0deg,#04252c 0 4px,transparent 4px 7px);border-radius:3px;opacity:.85}
+.brand b{display:block;letter-spacing:.08em}
+.brand small{color:var(--muted);font-size:12px}
+.navlabel{font-size:11px;letter-spacing:.12em;color:var(--muted);margin:0 8px 8px}
+.nav a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:14px;margin-bottom:4px;position:relative}
+.nav a svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8}
+.nav a.on{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent);color:var(--text)}
+.nav a.on:before{content:"";position:absolute;left:-14px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--acc)}
+.side .foot{margin-top:auto;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--acc);display:inline-block;box-shadow:0 0 8px var(--acc)}
+/* main */
+.main{padding:26px 32px;overflow:auto}
+.head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;gap:16px}
+.head h2{margin:0;font-size:24px}
+.head p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.iconbtn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.step{width:22px;height:22px;border-radius:7px;background:rgba(34,211,238,.15);color:var(--acc);font-size:12px;display:grid;place-items:center;font-weight:700}
+.stack{display:flex;flex-direction:column;gap:14px}
+.chips{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.chip{border:1px solid var(--line);background:var(--card2);border-radius:11px;padding:10px 6px;text-align:center;font-size:12px;color:var(--muted)}
+.chip svg{display:block;margin:0 auto 6px;width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.chip.on{border-color:var(--acc);color:var(--text);background:rgba(34,211,238,.08);box-shadow:0 0 0 3px rgba(34,211,238,.08)}
+label{font-size:11px;letter-spacing:.08em;color:var(--muted);display:block;margin:12px 0 6px}
+.in{background:#081016;border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--text);font-size:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tabs{display:flex;gap:4px;background:var(--card2);padding:4px;border-radius:11px;margin-bottom:12px;width:max-content}
+.tabs span{padding:7px 14px;border-radius:8px;font-size:13px;color:var(--muted)}
+.tabs span.on{background:var(--acc);color:var(--accInk);font-weight:600}
+.presets{display:flex;gap:10px;flex-wrap:wrap}
+.preset{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.preset i{width:42px;height:42px;border-radius:12px;border:2px solid transparent}
+.preset.on i{border-color:var(--acc)}
+.swrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.sw{display:flex;gap:10px;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:10px}
+.sw i{width:30px;height:30px;border-radius:8px}
+.sw b{font-size:13px}.sw small{display:block;color:var(--muted);font-size:11px}
+.shapes{display:flex;gap:8px}
+.shape{width:46px;height:46px;border-radius:11px;border:1px solid var(--line);background:var(--card2);display:grid;place-items:center}
+.shape.on{border-color:var(--acc)}
+.slider{height:6px;border-radius:6px;background:linear-gradient(90deg,var(--acc) 35%,var(--line) 35%);position:relative;margin:14px 0 4px}
+.slider:after{content:"";position:absolute;left:35%;top:50%;width:16px;height:16px;border-radius:50%;background:var(--text);transform:translate(-50%,-50%);box-shadow:0 0 0 4px rgba(34,211,238,.25)}
+.warn{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ok);margin-top:10px}
+/* preview */
+.sticky{position:sticky;top:0}
+.qrbox{background:radial-gradient(circle at 50% 30%,rgba(34,211,238,.10),transparent 70%),var(--card2);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;place-items:center}
+.qr{width:240px;height:240px;background:#fff;border-radius:14px;padding:14px}
+.qr canvas{width:100%;height:100%}
+.badge{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:6px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:var(--ok);margin-top:14px}
+.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.meta div{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.meta small{display:block;color:var(--muted);font-size:10px;letter-spacing:.08em}
+.meta b{font-size:13px}
+.btn{display:flex;justify-content:center;align-items:center;gap:8px;padding:12px;border-radius:11px;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--card2);color:var(--text)}
+.btn.pri{background:linear-gradient(90deg,var(--acc),var(--acc2));color:var(--accInk);border:0;box-shadow:0 8px 24px rgba(34,211,238,.25)}
+.btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.btns .btn{font-size:13px;padding:10px}
+.fmt{display:flex;gap:6px;margin-top:10px}
+.fmt span{flex:1;text-align:center;font-size:12px;padding:6px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+.fmt span.on{border-color:var(--acc);color:var(--acc)}
+/* scan */
+.srcs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.src{border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:12px;text-align:center;font-size:13px;color:var(--muted)}
+.src svg{display:block;margin:0 auto 6px;width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.src.on{border-color:var(--acc);color:var(--text);background:rgba(34,211,238,.08)}
+.drop{border:1.5px dashed rgba(34,211,238,.45);border-radius:14px;min-height:330px;display:grid;place-items:center;text-align:center;background:radial-gradient(circle at 50% 40%,rgba(34,211,238,.06),transparent 65%)}
+.drop svg{width:56px;height:56px;stroke:var(--acc);fill:none;stroke-width:1.5}
+.drop h4{margin:12px 0 4px;font-size:18px}
+.drop p{margin:0 0 16px;color:var(--muted);font-size:13px}
+.drop .btn{display:inline-flex;padding:11px 26px}
+.fmts{font-size:12px;color:var(--muted);margin-top:14px}
+.tips{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
+.tips span:before{content:"• ";color:var(--acc)}
+.res{display:flex;flex-direction:column;gap:12px}
+.typechip{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:6px 10px;border-radius:999px;background:rgba(34,211,238,.12);color:var(--acc);width:max-content}
+.field{display:flex;justify-content:space-between;padding:10px 12px;background:var(--card2);border:1px solid var(--line);border-radius:10px;font-size:13px}
+.field span{color:var(--muted)}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--muted);font-size:13px}
+.notes{max-width:1280px;margin:18px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.note{background:#0b1117;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:13px;color:var(--muted);line-height:1.5}
+.note b{color:var(--text);display:block;margin-bottom:4px}
+.hide{display:none}
+@media (max-width:900px){.win{grid-template-columns:1fr}.side{display:none}.grid{grid-template-columns:1fr}.chips{grid-template-columns:repeat(3,1fr)}.srcs{grid-template-columns:repeat(2,1fr)}.main{padding:18px}}
+</style>
+</head>
+<body>
+<h1 class="page" style="max-width:1280px;margin:0 auto 10px">Mosaiq QR Studio · proposed redesign (Aqua Mint theme)</h1>
+<div class="switch" style="max-width:1280px;margin:0 auto 16px">
+  <button class="on" onclick="show('gen',this)">Generate page</button>
+  <button onclick="show('scan',this)">Scan page</button>
+</div>
+
+<div class="win">
+  <aside class="side">
+    <div class="brand"><div class="logo"><i></i></div><div><b>MOSAIQ</b><small>QR Studio · v2.2</small></div></div>
+    <div class="navlabel">WORKSPACE</div>
+    <nav class="nav">
+      <a href="#" id="n-gen" class="on" onclick="show('gen');return false"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>Generate</a>
+      <a href="#" id="n-scan" onclick="show('scan');return false"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>Scan QR</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>Bulk Create</a>
+    </nav>
+    <div class="foot"><span><span class="dot"></span>&nbsp; Aqua Mint</span><span>⚙ Settings</span></div>
+  </aside>
+
+  <main class="main">
+    <!-- GENERATE -->
+    <section id="gen">
+      <div class="head"><div><h2>Generate QR Code</h2><p>Pick a type, fill the details, style it, then save.</p></div><div class="iconbtn">⚙</div></div>
+      <div class="grid">
+        <div class="stack">
+          <div class="card">
+            <h3><span class="step">1</span>Content</h3>
+            <div class="chips">
+              <div class="chip"><svg viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>URL / Text</div>
+              <div class="chip on"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h3"/></svg>UPI</div>
+              <div class="chip"><svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/></svg>WiFi</div>
+              <div class="chip"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Contact</div>
+              <div class="chip"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Email</div>
+              <div class="chip"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></svg>SMS</div>
+            </div>
+            <div class="row2">
+              <div><label>UPI ID</label><div class="in">sample@examplebank</div></div>
+              <div><label>PAYEE NAME</label><div class="in">Mosaiq Cafe</div></div>
+            </div>
+            <div class="row2">
+              <div><label>AMOUNT (OPTIONAL)</label><div class="in">₹ 249.00</div></div>
+              <div><label>NOTE (OPTIONAL)</label><div class="in">Order #1024</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><span class="step">2</span>Design</h3>
+            <div class="tabs"><span class="on">Colours</span><span>Style</span><span>Logo</span></div>
+            <div class="presets">
+              <div class="preset on"><i style="background:linear-gradient(135deg,#0f172a,#22d3ee)"></i>Ocean</div>
+              <div class="preset"><i style="background:#111;border-color:#333"></i>Classic</div>
+              <div class="preset"><i style="background:linear-gradient(135deg,#1e1b4b,#8b5cf6)"></i>Midnight</div>
+              <div class="preset"><i style="background:linear-gradient(135deg,#7c2d12,#fb923c)"></i>Sunset</div>
+              <div class="preset"><i style="background:linear-gradient(135deg,#064e3b,#34d399)"></i>Mint</div>
+              <div class="preset"><i style="background:linear-gradient(135deg,#334155,#cbd5e1)"></i>Mono</div>
+            </div>
+            <div class="swrow">
+              <div class="sw"><i style="background:linear-gradient(135deg,#0e7490,#1e3a8a)"></i><div><b>Gradient · #0E7490 → #1E3A8A</b><small>QR colour · click to edit</small></div></div>
+              <div class="sw"><i style="background:#fff"></i><div><b>#FFFFFF</b><small>Background · click to edit</small></div></div>
+            </div>
+            <div class="row2" style="margin-top:4px">
+              <div><label>DOT SHAPE</label><div class="shapes"><div class="shape">■</div><div class="shape on">▢</div><div class="shape">●</div></div></div>
+              <div><label>LOGO SIZE · 18%</label><div class="slider"></div><small style="color:var(--muted);font-size:11px">Safe up to 22%</small></div>
+            </div>
+            <div class="warn">● Good contrast — this will scan well</div>
+          </div>
+        </div>
+
+        <div class="sticky">
+          <div class="card">
+            <h3><span class="dot"></span>&nbsp;Live Preview</h3>
+            <div class="qrbox"><div class="qr"><canvas id="qr" width="212" height="212"></canvas></div>
+              <span class="badge">✓ Scans correctly · UPI payment</span></div>
+            <div class="meta"><div><small>FORMAT</small><b>PNG</b></div><div><small>SIZE</small><b>450 px</b></div><div><small>ERROR CORR.</small><b>H</b></div></div>
+            <div class="fmt"><span class="on">PNG</span><span>SVG</span><span>PDF</span></div>
+            <div style="margin-top:12px" class="btn pri">⚡ Generate QR</div>
+            <div class="btns"><div class="btn">⬇ Save</div><div class="btn">⧉ Copy</div><div class="btn" style="color:var(--bad)">✕ Clear</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCAN -->
+    <section id="scan" class="hide">
+      <div class="head"><div><h2>Scan a QR code</h2><p>Decode links, text, UPI, WiFi, contacts, email and SMS.</p></div><div class="iconbtn">⚙</div></div>
+      <div class="grid">
+        <div class="card">
+          <div class="srcs">
+            <div class="src on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>Image</div>
+            <div class="src"><svg viewBox="0 0 24 24"><path d="M15 10l5-3v10l-5-3z"/><rect x="2" y="6" width="13" height="12" rx="2"/></svg>Camera</div>
+            <div class="src"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Screen region</div>
+            <div class="src"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Paste · Ctrl+V</div>
+          </div>
+          <div class="drop"><div>
+            <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+            <h4>Drop a QR image here</h4>
+            <p>or click to browse your files</p>
+            <span class="btn pri">Browse Image</span>
+            <div class="fmts">PNG · JPG · JPEG · WEBP · BMP</div>
+          </div></div>
+          <div class="tips"><span>Use a sharp image</span><span>Good contrast helps</span><span>Avoid cropped codes</span></div>
+        </div>
+
+        <div class="sticky">
+          <div class="card res">
+            <h3><span class="dot" style="background:var(--ok);box-shadow:0 0 8px var(--ok)"></span>&nbsp;Result</h3>
+            <span class="typechip">📶 WiFi network</span>
+            <div style="font-size:20px;font-weight:600">Mosaiq Guest</div>
+            <div class="field"><span>Security</span><b>WPA</b></div>
+            <div class="field"><span>Password</span><b>••••••••••</b></div>
+            <div class="field"><span>Hidden</span><b>No</b></div>
+            <div class="btn pri">Copy password</div>
+            <div class="btn">Copy raw text</div>
+            <div class="empty" style="margin-top:4px">Empty state: “Nothing yet — scan a QR to see it here”<br>Error state: soft red border + reason</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="notes">
+  <div class="note"><b>1. Alignment fix</b>Page title, subtitle and cards start on the same left edge. Today the title sits further right than the cards.</div>
+  <div class="note"><b>2. Preview stays visible</b>Right column sticks while you scroll. Generate, Save, Copy, Clear and PNG/SVG/PDF sit under the preview, so buttons are never hidden at the bottom.</div>
+  <div class="note"><b>3. Numbered steps</b>Generate becomes two cards: ① Content, ② Design (Colours · Style · Logo tabs). Less scrolling, clearer flow.</div>
+  <div class="note"><b>4. Icon chips</b>QR types and scan sources become icon tiles instead of plain text tabs and small buttons.</div>
+  <div class="note"><b>5. Smart results</b>Result card shows type, title and fields, with the right primary button. “Test scan” badge on the preview.</div>
+  <div class="note"><b>6. Sidebar</b>Proper icons, History and Bulk Create added, theme moved to a compact footer and Settings. Output file name moves into the Save dialog.</div>
+</div>
+
+<script>
+function show(id,btn){
+  document.getElementById('gen').classList.toggle('hide',id!=='gen');
+  document.getElementById('scan').classList.toggle('hide',id!=='scan');
+  document.getElementById('n-gen').classList.toggle('on',id==='gen');
+  document.getElementById('n-scan').classList.toggle('on',id==='scan');
+  document.querySelectorAll('.switch button').forEach((b,i)=>b.classList.toggle('on',(i===0)===(id==='gen')));
+}
+// decorative QR-like pattern (sample only, not a real code)
+(function(){
+  const c=document.getElementById('qr'),x=c.getContext('2d'),n=29,s=c.width/n;
+  const g=x.createLinearGradient(0,0,c.width,c.height);g.addColorStop(0,'#0e7490');g.addColorStop(1,'#1e3a8a');
+  x.fillStyle=g;let seed=7;const r=()=>(seed=(seed*9301+49297)%233280)/233280;
+  function eye(cx,cy){x.beginPath();x.roundRect(cx*s,cy*s,7*s,7*s,2*s);x.fill();x.fillStyle='#fff';x.beginPath();x.roundRect((cx+1)*s,(cy+1)*s,5*s,5*s,1.5*s);x.fill();x.fillStyle=g;x.beginPath();x.roundRect((cx+2)*s,(cy+2)*s,3*s,3*s,1*s);x.fill();}
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const inEye=(i<8&&j<8)||(i>n-9&&j<8)||(i<8&&j>n-9);
+    const inLogo=Math.abs(i-14)<4&&Math.abs(j-14)<4;
+    if(!inEye&&!inLogo&&r()>.5){x.beginPath();x.roundRect(i*s+.6,j*s+.6,s-1.2,s-1.2,s*.35);x.fill();}
+  }
+  eye(0,0);eye(n-7,0);eye(0,n-7);
+  x.fillStyle='#fff';x.beginPath();x.roundRect(10.5*s,10.5*s,8*s,8*s,2*s);x.fill();
+  x.fillStyle=g;x.font='bold '+(4*s)+'px Segoe UI';x.textAlign='center';x.textBaseline='middle';x.fillText('₹',14.5*s,14.7*s);
+})();
+</script>
+</body>
+</html>
