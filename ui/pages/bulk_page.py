@@ -85,7 +85,7 @@ class BulkPage(TwoColumnPage):
                                                command=lambda _v: self._update_summary())
         self.format_selector.set("PNG")
         self.format_selector.pack(anchor="w", pady=(4, 12))
-        self.style_label = ctk.CTkLabel(out, text="", anchor="w", justify="left", wraplength=560,
+        self.style_label = ctk.CTkLabel(out, text="", anchor="w", justify="left", wraplength=820,
                                         font=("Segoe UI", 12), text_color=theme["text_secondary"])
         self.style_label.pack(fill="x")
 
@@ -216,7 +216,7 @@ class BulkPage(TwoColumnPage):
                     self.table, text=text, anchor="w", justify="left", font=("Segoe UI", 12),
                     text_color=color if column == 4 else theme["text"],
                     width=COLUMNS[column][1], wraplength=230 if column == 4 else 0)
-                label.grid(row=index, column=column, sticky="w",
+                label.grid(row=index, column=column, sticky="ew" if column == 3 else "w",
                            padx=(12 if column == 0 else 4, 4), pady=2)
         if not visible:
             ctk.CTkLabel(self.table, text="No rows with errors.", font=("Segoe UI", 12),

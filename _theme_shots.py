@@ -42,6 +42,10 @@ def _one(theme, outdir):
     gp.content_card.url_entry.delete(0, "end")
     gp.content_card.url_entry.insert(0, SAMPLE_URL)
     gp.generate_qr()
+    end = time.time() + 2.0                     # let the test scan finish: the badge is part of the picture
+    while time.time() < end:
+        root.update()
+        time.sleep(0.02)
     shot("generate")
 
     app.show_scan_page()

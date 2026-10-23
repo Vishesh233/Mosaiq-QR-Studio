@@ -82,6 +82,13 @@ def main():
     check("zone shows the file name", uc.title_label.cget("text") == "sample.png",
           uc.title_label.cget("text"))
     check("zone is solid with an image", uc.upload_frame._solid is True)
+    zone = uc.upload_frame
+    inner = zone.inner
+    check("picture, name and button stay inside the zone's outline (do not cover it)",
+          inner.winfo_rooty() > zone.winfo_rooty() + 3
+          and inner.winfo_rooty() + inner.winfo_height() < zone.winfo_rooty() + zone.winfo_height() - 3,
+          f"content {inner.winfo_rooty()}..{inner.winfo_rooty() + inner.winfo_height()}, "
+          f"zone {zone.winfo_rooty()}..{zone.winfo_rooty() + zone.winfo_height()}")
     uc.clear()
     rc.clear()
     check("zone is dashed again after Clear", uc.upload_frame._solid is False)

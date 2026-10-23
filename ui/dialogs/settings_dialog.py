@@ -28,7 +28,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self.title("Settings")
         apply_window_icon(self)
-        height = min(900, max(520, self.winfo_screenheight() - 140))
+        height = min(990, max(520, self.winfo_screenheight() - 140))
         self.geometry(f"760x{height}")
         self.resizable(False, False)
 

@@ -42,11 +42,15 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 
 ## Screenshots
 
-| Generate | Scan |
+| Generate | Style |
 |---|---|
-| ![Generate a QR code](assets/images/generate.png) | ![Scan a QR code](assets/images/scan.png) |
-| **Themes** | **Light mode** |
-| ![Theme gallery](assets/images/theme_settings.png) | ![Daylight theme](assets/images/light_mode.png) |
+| ![Generate a QR code](assets/images/generate.png) | ![Style a QR code](assets/images/style.png) |
+| **Scan** | **History** |
+| ![Scan a QR code](assets/images/scan.png) | ![History](assets/images/history.png) |
+| **Bulk Create** | **Settings and themes** |
+| ![Bulk Create](assets/images/bulk.png) | ![Theme gallery](assets/images/theme_settings.png) |
+| **Light mode** | |
+| ![Daylight theme](assets/images/light_mode.png) | |
 
 ## Run from source
 
@@ -83,6 +87,8 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_dnd_test.py` | drag and drop fallback, and real OLE drops (needs `tkinterdnd2`) |
 | `_cv2_missing_test.py` | OpenCV loads lazily; if it cannot load (Windows N without the Media Feature Pack) the app starts, Generate works, Scan/Camera show a clear message and the cause is logged |
 | `_frozen_exe_test.py` | the built exe: PerMonitorV2 DPI awareness, real Screen Region scan at the PC's display scaling, clean exit (build first) |
+
+Screenshots are made by two tools that capture only the app's own window (never the screen) with throw-away settings: `_theme_shots.py <folder>` (Generate, Scan, History, Bulk Create, Settings and the colour picker in every theme) and `_store_shots.py <folder>` (the 1920 x 1140 Store pictures in `assets/images`).
 
 ## Build
 

@@ -12,7 +12,7 @@ class Header(ctk.CTkFrame):
     ``set_title`` is driven by the active page.
     """
 
-    HEIGHT = 12 * GRID
+    HEIGHT = 13 * GRID
 
     def __init__(self, parent):
         theme = ThemeManager.get_theme()
@@ -24,7 +24,7 @@ class Header(ctk.CTkFrame):
             fg_color=theme["background"],
         )
 
-        self.pack_propagate(False)
+        self.grid_propagate(False)           # children are gridded: keep the height asked for
 
         self._title_label = None
         self._subtitle_label = None

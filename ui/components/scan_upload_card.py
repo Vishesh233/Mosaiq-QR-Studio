@@ -361,7 +361,7 @@ class ScanUploadCard(Card):
 
         if image is not None:
 
-            image.thumbnail((170, 170))
+            image.thumbnail((130, 130))      # small enough that the picture, name and button stay inside the dashed zone
 
             self.preview_image = ctk.CTkImage(
                 light_image=image,
