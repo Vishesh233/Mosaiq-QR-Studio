@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DESKTOP = {"_camera_test.py", "_region_test.py", "_dnd_test.py"}
 RETRY = {"_dnd_test.py"}
 SLOW_TIMEOUT = 420
+TIMEOUTS = {"_theme_contrast_test.py": 1200}      # every theme change on every page
 
 
 def _kill_group(job):
@@ -54,7 +55,7 @@ def run(script):
         win32job.AssignProcessToJobObject(job, handle)
         leftover = 0
         try:
-            code = proc.wait(timeout=SLOW_TIMEOUT)
+            code = proc.wait(timeout=TIMEOUTS.get(os.path.basename(script), SLOW_TIMEOUT))
             timed_out = False
             time.sleep(0.5)                  # let a clean exit finish
             leftover = _left_running(job)
@@ -66,7 +67,7 @@ def run(script):
         sink.seek(0)
         output = sink.read().decode("utf-8", errors="replace")
     if timed_out:
-        output = f"TIMEOUT after {SLOW_TIMEOUT}s\n" + output
+        output = f"TIMEOUT after {TIMEOUTS.get(os.path.basename(script), SLOW_TIMEOUT)}s\n" + output
     if leftover:
         # A test that leaves a window or helper process running fails even when its checks passed.
         output += f"\nLEFTOVER: {leftover} process(es) of this test were still running after it ended\n"

@@ -6,6 +6,7 @@ from ui.sidebar import Sidebar
 from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
 from ui.pages.history_page import HistoryPage
+from ui.pages.bulk_page import BulkPage
 from ui.splash import Splash, splash_disabled
 from ui.brand_logo import apply_window_icon
 from ui.dnd_support import create_root
@@ -43,6 +44,10 @@ class QRCodeStudioApp:
         "history": (
             "History",
             "Codes you generated and scanned on this PC.",
+        ),
+        "bulk": (
+            "Bulk Create",
+            "Make many QR codes at once from a CSV file.",
         ),
     }
 
@@ -111,8 +116,10 @@ class QRCodeStudioApp:
         self.history_page = HistoryPage(self.body, on_open=self.open_history_entry,
                                         on_regenerate=self.regenerate_history_entry)
 
+        self.bulk_page = BulkPage(self.body, style_provider=self._generate_look)
+
         self._pages = {"generate": self.generate_page, "scan": self.scan_page,
-                       "history": self.history_page}
+                       "history": self.history_page, "bulk": self.bulk_page}
         self._current_page = None
         self._show_page("generate")
 
@@ -123,6 +130,7 @@ class QRCodeStudioApp:
         self.sidebar.add_nav_item("generate", "Generate", "generate", self.show_generate_page)
         self.sidebar.add_nav_item("scan", "Scan QR", "scan", self.show_scan_page)
         self.sidebar.add_nav_item("history", "History", "history", self.show_history_page)
+        self.sidebar.add_nav_item("bulk", "Bulk Create", "bulk", self.show_bulk_page)
 
         # Closing the window must release the camera before the app exits.
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -131,6 +139,7 @@ class QRCodeStudioApp:
 
     def close(self):
         self.scan_page.shutdown()
+        self.bulk_page.shutdown()
         self.root.destroy()
 
     # ==================================================
@@ -156,6 +165,15 @@ class QRCodeStudioApp:
 
     def show_scan_page(self):
         self._show_page("scan")
+
+    def show_bulk_page(self):
+        self.bulk_page._update_summary()          # the look may have changed on Generate
+        self._show_page("bulk")
+
+    def _generate_look(self):
+        """The style and logo chosen on the Generate page (Bulk Create uses them)."""
+        gp = self.generate_page
+        return gp.current_style(), gp.logo_card.get_logo_path()
 
     def show_history_page(self):
         self.history_page.refresh()
@@ -200,6 +218,7 @@ class QRCodeStudioApp:
         if hasattr(self.scan_page, "refresh_theme"):
             self.scan_page.refresh_theme()
         self.history_page.refresh_theme()
+        self.bulk_page.refresh_theme()
 
         self.root.update_idletasks()
 

@@ -17,6 +17,7 @@ DEFAULT_STEMS = {
 FALLBACK_STEM = "qr_code"
 
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_DOT_RUN = re.compile(r"\.{2,}")
 _RESERVED = {"CON", "PRN", "AUX", "NUL",
              *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 MAX_STEM = 100
@@ -36,7 +37,7 @@ def safe_stem(name, fallback=FALLBACK_STEM):
     stem = _ILLEGAL.sub("_", str(name or "")).strip().rstrip(". ")
     if not stem or stem.split(".")[0].upper() in _RESERVED:
         return fallback
-    return stem[:MAX_STEM]
+    return _DOT_RUN.sub("_", stem)[:MAX_STEM]               # no ".." left, even without slashes
 
 
 def with_extension(path, extension):

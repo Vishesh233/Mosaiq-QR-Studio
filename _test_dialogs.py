@@ -1,5 +1,9 @@
 """Keeps real dialogs off the screen while the tests run (not part of the app).
 
+It also keeps the test windows out of the taskbar: a test parks its window far off-screen, and
+a taskbar button for a window nobody can see invites a click that minimizes it in the middle
+of a layout check.
+
 A message box or file dialog that really opens blocks the test until somebody clicks it.
 ``install()`` replaces every tkinter message box and file dialog with a recorder:
 
@@ -84,10 +88,23 @@ def _finish():
     os._exit(1)
 
 
+def _without_taskbar_button():
+    import customtkinter
+
+    original = customtkinter.CTk.__init__
+
+    def init(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self.attributes("-toolwindow", True)         # no taskbar button (Windows)
+
+    customtkinter.CTk.__init__ = init
+
+
 def install():
     """Replace the dialogs (once per process); returns this module for ``calls`` / ``answers``."""
     global _installed
     if not _installed:
+        _without_taskbar_button()
         for name in _BOXES:
             setattr(messagebox, name, _box(name))
         for name in _FILE_DIALOGS:

@@ -4,6 +4,7 @@ from tkinter import messagebox
 from utils import history_store, settings_store
 from utils.theme_manager import ThemeManager
 from ui import icons
+from ui.layout import autohide_scrollbar, restyle_scrollable
 from ui.brand_logo import apply_window_icon
 
 
@@ -73,8 +74,13 @@ class SettingsDialog(ctk.CTkToplevel):
         # Bottom buttons first so they stay visible; everything else scrolls above them.
         button_frame = ctk.CTkFrame(self.container, fg_color="transparent")
         button_frame.pack(side="bottom", fill="x", padx=30, pady=(8, 20))
-        self.body = ctk.CTkScrollableFrame(self.container, fg_color="transparent", corner_radius=0)
+        self.body = ctk.CTkScrollableFrame(
+            self.container, fg_color="transparent", corner_radius=0,
+            scrollbar_button_color=theme["scrollbar"],
+            scrollbar_button_hover_color=theme["scrollbar_hover"],
+            label_text_color=theme["text"], label_fg_color=theme["background"])
         self.body.pack(fill="both", expand=True)
+        autohide_scrollbar(self.body)
 
         # ---------------- Title ---------------- #
 
@@ -317,6 +323,7 @@ class SettingsDialog(ctk.CTkToplevel):
             app.refresh_theme()
         else:
             ThemeManager.retheme_tree(self)
+        restyle_scrollable(self.body, "background")
 
     def preview_theme(self, theme_name):
         """Show ``theme_name`` on the whole app right away (not saved yet)."""
