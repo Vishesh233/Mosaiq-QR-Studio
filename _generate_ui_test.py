@@ -51,6 +51,8 @@ def test_ui():
     appdata = tempfile.mkdtemp()
     os.environ["APPDATA"] = appdata
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     root.geometry("1280x820+-30000+-30000")   # off-screen, but mapped (withdrawn = unmapped)
@@ -170,7 +172,10 @@ def test_ui():
     # ---- Save dialog ----
     original = (filedialog.asksaveasfilename, messagebox.showinfo, messagebox.showerror,
                 messagebox.showwarning)
+    from utils import qr_export
+    qr_export_types = qr_export.FILE_TYPES
     shown = []
+    shown_messages = shown
     messagebox.showinfo = lambda *a, **k: shown.append(("info", a))
     messagebox.showerror = lambda *a, **k: shown.append(("error", a))
     messagebox.showwarning = lambda *a, **k: shown.append(("warning", a))
@@ -220,6 +225,54 @@ def test_ui():
                       repr(shown))
             except Exception as e:
                 check(f"bad path {bad!r} did not raise", False, repr(e))
+
+        # ---- SVG and PDF from the format selector ----
+        gp.content_card.set_type("UPI Payment")
+        form = gp.content_card.forms["UPI Payment"]
+        for fld, val in ((form.upi_id, "shop@okaxis"), (form.payee, "Corner Shop")):
+            fld.widget.delete(0, "end")
+            fld.widget.insert(0, val)
+        gp.generate_qr()
+        preview = gp.preview_card
+        check("PNG is the default format", preview.get_format() == "PNG"
+              and preview.format_label.cget("text") == "PNG"
+              and preview.resolution_label.cget("text") == f"{gp.generated_image.width} px")
+        for fmt, ext, size_text, magic in (("SVG", ".svg", "Scalable", b"<svg"), ("PDF", ".pdf", None, b"%PDF-")):
+            preview.format_selector.set(fmt)
+            preview._format_picked(fmt)
+            check(f"{fmt}: FORMAT tile follows", preview.format_label.cget("text") == fmt)
+            size_shown = preview.resolution_label.cget("text")
+            check(f"{fmt}: SIZE tile", size_shown == size_text if size_text else
+                  (size_shown.endswith(" px") and int(size_shown.split()[0]) >= 2000), size_shown)
+            del shown_messages[:]
+            answer["value"] = os.path.join(appdata, "chosen_name")
+            gp.save_qr()
+            check(f"{fmt}: dialog offers the right name", asked.get("initialfile") == f"upi_qr{ext}",
+                  repr(asked.get("initialfile")))
+            check(f"{fmt}: dialog offers only {fmt}", asked.get("filetypes") == [qr_export_types[fmt]]
+                  and asked.get("defaultextension") == ext, repr(asked.get("filetypes")))
+            written = os.path.join(appdata, "chosen_name" + ext)
+            check(f"{fmt}: file written with the extension", os.path.exists(written))
+            if os.path.exists(written):
+                check(f"{fmt}: file content looks right", open(written, "rb").read(8).startswith(magic))
+            check(f"{fmt}: message names the format",
+                  any(kind == "info" and fmt in args[1] for kind, args in shown), repr(shown))
+            del shown[:]
+        preview.format_selector.set("PNG")
+        preview._format_picked("PNG")
+        check("back to PNG", preview.resolution_label.cget("text") == f"{gp.generated_image.width} px")
+        # an unwritable target is reported for every format
+        for fmt in ("SVG", "PDF"):
+            preview.format_selector.set(fmt)
+            preview._format_picked(fmt)
+            del shown[:]
+            answer["value"] = os.path.join(appdata, "missing_folder", "x")
+            gp.save_qr()
+            check(f"{fmt}: unwritable path reported", any(kind == "error" for kind, _ in shown), repr(shown))
+        preview.format_selector.set("PNG")
+        preview._format_picked("PNG")
+        gp.content_card.set_type("URL / Text")
+        gp.generate_qr()
 
         # nothing generated yet: warning, no dialog
         gp.clear_form()

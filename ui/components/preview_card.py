@@ -3,6 +3,8 @@ from PIL import Image
 
 from ui.components.action_buttons import ActionButtons
 from ui.layout import SectionCard
+from ui.widgets import ModernSegmented
+from utils import qr_export
 from utils.theme_manager import ThemeManager
 
 
@@ -23,6 +25,9 @@ class PreviewCard(SectionCard):
         self._source = None
         self._shown_size = None
         self._fit_job = None
+        self._pixels = None
+        self._pdf_pixels = None
+        self.format_callback = None
 
         self.build_ui()
 
@@ -35,6 +40,11 @@ class PreviewCard(SectionCard):
         # ---- bottom-up (pack gives the first-packed widgets their space first) ----
         self.actions = ActionButtons(body)
         self.actions.pack(side="bottom", fill="x")
+
+        self.format_selector = ModernSegmented(
+            body, values=list(qr_export.FORMATS), command=self._format_picked, height=30)
+        self.format_selector.set("PNG")
+        self.format_selector.pack(side="bottom", fill="x", pady=(0, 12))
 
         self.meta = ctk.CTkFrame(body, fg_color="transparent")
         self.meta.pack(side="bottom", fill="x", pady=(14, 14))
@@ -85,6 +95,33 @@ class PreviewCard(SectionCard):
 
     # ==================================================
 
+    # ==================================================
+
+    def get_format(self):
+        """The export format chosen under the preview: "PNG", "SVG" or "PDF"."""
+        return self.format_selector.get()
+
+    def _format_picked(self, value):
+        self._refresh_facts()
+        if self.format_callback:
+            self.format_callback(value)
+
+    def _refresh_facts(self):
+        """FORMAT and SIZE tiles for the chosen format."""
+        fmt = self.get_format()
+        self.format_label.configure(text=fmt)
+        if self._pixels is None:
+            text = "—"
+        elif fmt == "SVG":
+            text = "Scalable"
+        elif fmt == "PDF":
+            text = f"{self._pdf_pixels} px"
+        else:
+            text = f"{self._pixels} px"
+        self.resolution_label.configure(text=text)
+
+    # ==================================================
+
     def set_badge(self, text, kind="ok"):
         """Status line under the QR ("Scans correctly ..."); ``None`` hides it.
 
@@ -101,15 +138,19 @@ class PreviewCard(SectionCard):
 
     # ==================================================
 
-    def set_image(self, image):
+    def set_image(self, image, pdf_pixels=None):
         """
         Display generated QR image inside preview.
+
+        ``pdf_pixels``: width of the picture a PDF export holds (shown for the PDF format).
         """
 
         self.placeholder.place_forget()
 
-        # Save writes this same image, so this is the saved PNG's size.
-        self.resolution_label.configure(text=f"{image.width} px")
+        # PNG saves this same image, so this is the saved PNG's size.
+        self._pixels = image.width
+        self._pdf_pixels = pdf_pixels or image.width
+        self._refresh_facts()
 
         self._source = image.copy()
         self._shown_size = None
@@ -168,7 +209,8 @@ class PreviewCard(SectionCard):
         self._source = None
         self._shown_size = None
         self.ctk_image = None
-        self.resolution_label.configure(text="—")
+        self._pixels = None
+        self._refresh_facts()
         self.set_badge(None)
 
         self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
@@ -181,6 +223,7 @@ class PreviewCard(SectionCard):
         self.preview_box.configure(fg_color=theme["segment_bg"], border_color=theme["border"])
         self.placeholder.configure(text_color=theme["text_secondary"])
         self.badge.configure(fg_color=theme["segment_bg"])
+        self.format_selector.apply_theme()
         for tile, small, big in self._meta_tiles:
             tile.configure(fg_color=theme["segment_bg"], border_color=theme["border"])
             small.configure(text_color=theme["text_secondary"])

@@ -4,7 +4,7 @@ from ui.components.content_card import ContentCard
 from ui.components.design_card import DesignCard
 from ui.components.preview_card import PreviewCard
 from ui.layout import CARD_GAP, TwoColumnPage
-from utils import filenames, self_check
+from utils import filenames, qr_export, self_check
 from utils.qr_generator import QRGenerator
 from utils.clipboard import ClipboardManager
 from tkinter import messagebox
@@ -20,6 +20,8 @@ class GeneratePage(TwoColumnPage):
         self.generator = QRGenerator()
         self.generated_image = None
         self.generated_data = None          # the text behind generated_image
+        self.generated_style = None         # the style and logo it was drawn with (for exports)
+        self.generated_logo = None
         self._refresh_job = None
         self._checker = self_check.BackgroundCheck()
         self._check_job = None
@@ -85,7 +87,9 @@ class GeneratePage(TwoColumnPage):
         )
         self.generated_image = image
         self.generated_data = data
-        self.preview_card.set_image(image)
+        self.generated_style = self.current_style()
+        self.generated_logo = self.logo_card.get_logo_path()
+        self.preview_card.set_image(image, qr_export.pdf_pixels(self.generator, data))
         self.action_buttons.enable_export_buttons()
         self._begin_test_scan(image, data)
 
@@ -160,6 +164,8 @@ class GeneratePage(TwoColumnPage):
         # Remove generated image
         self.generated_image = None
         self.generated_data = None
+        self.generated_style = None
+        self.generated_logo = None
 
         # Disable buttons
         self.action_buttons.disable_export_buttons()
@@ -203,27 +209,29 @@ class GeneratePage(TwoColumnPage):
             )
             return
 
+        fmt = self.preview_card.get_format()
+        extension = qr_export.EXTENSIONS[fmt]
+
         filepath = filedialog.asksaveasfilename(
-            title="Save QR Code",
-            initialfile=f"{self.content_card.default_filename_stem()}.png",
-            defaultextension=".png",
-            filetypes=[
-                ("PNG Image", "*.png")
-            ]
+            title=f"Save QR Code as {fmt}",
+            initialfile=f"{self.content_card.default_filename_stem()}{extension}",
+            defaultextension=extension,
+            filetypes=[qr_export.FILE_TYPES[fmt]]
         )
 
         if not filepath:
             return
 
-        filepath = filenames.with_extension(filepath, ".png")
+        filepath = filenames.with_extension(filepath, extension)
 
         try:
 
-            self.generated_image.save(filepath)
+            qr_export.export(filepath, fmt, self.generator, self.generated_data,
+                             self.generated_style, self.generated_logo)
 
             messagebox.showinfo(
                 "Saved",
-                "QR Code saved successfully."
+                f"QR Code saved as {fmt}."
             )
 
         except Exception as e:
