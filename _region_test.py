@@ -56,6 +56,8 @@ def test_mapping():
 def main():
     test_mapping()
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     state = {"done": False}

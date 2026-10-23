@@ -170,6 +170,8 @@ def check_widgets(problems):
     from ui.dialogs.settings_dialog import SettingsDialog
     from utils.theme_manager import ThemeManager
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     # Parked off-screen (not withdrawn): dialogs of a withdrawn window never become visible.

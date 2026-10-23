@@ -157,6 +157,8 @@ def test_ui():
     from utils import qr_checks, qr_presets
     from utils.theme_manager import ThemeManager
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     root.geometry("1280x820+-30000+-30000")
@@ -178,7 +180,7 @@ def test_ui():
     gp.generate_qr()
     redraws = []
     original = gp.preview_card.set_image
-    gp.preview_card.set_image = lambda image: (redraws.append(1), original(image))[1]
+    gp.preview_card.set_image = lambda *a, **k: (redraws.append(1), original(*a, **k))[1]
 
     # a preset sets every field and redraws the preview exactly once
     tile = card.colours.preset_row._frames["Ocean"]._canvas

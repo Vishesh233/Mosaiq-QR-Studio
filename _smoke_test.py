@@ -15,6 +15,8 @@ def _run():
     # Import AFTER cwd is the repo root so package imports resolve.
     from ui.app import QRCodeStudioApp
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     # Parked far off-screen instead of withdrawn: a withdrawn window reports every widget
@@ -127,7 +129,7 @@ def _run():
     from tkinter import messagebox
     shown = []
     original_warning = messagebox.showwarning
-    messagebox.showwarning = lambda title, msg: shown.append(msg)
+    messagebox.showwarning = lambda title, msg, *a, **k: shown.append(msg)
     try:
         cc.clear()
         cc.set_type("UPI Payment")

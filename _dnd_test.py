@@ -86,6 +86,8 @@ def test_fallbacks():
     import ui.app as appmod
     appmod.create_root = lambda: (ctk.CTk(), "simulated: no drop support")
     try:
+        import _test_dialogs
+        _test_dialogs.install()
         app = appmod.QRCodeStudioApp()
         sp = app.scan_page
         check("fallback: app starts", app.root.winfo_exists() == 1)

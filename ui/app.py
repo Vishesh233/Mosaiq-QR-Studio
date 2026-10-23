@@ -17,7 +17,7 @@ from config import (
     WINDOW_MIN_HEIGHT,
 )
 
-from utils import settings_store
+from utils import app_log, settings_store, window_guard
 from utils.theme_manager import ThemeManager
 
 
@@ -177,6 +177,18 @@ class QRCodeStudioApp:
 
     # ==================================================
 
+    def verify_visible(self):
+        """A window outside every monitor, minimized or hidden shows only in the taskbar:
+        bring it back (and note it in the log)."""
+        try:
+            action = window_guard.ensure_visible(self.root)
+        except Exception:
+            app_log.get_logger().exception("window visibility check failed")
+            return "error"
+        if action != "ok":
+            app_log.get_logger().warning("main window was not visible at start (%s); moved back", action)
+        return action
+
     def _maximize(self):
         """Fill the available screen work area (respects the Windows taskbar).
 
@@ -249,7 +261,9 @@ class QRCodeStudioApp:
                 self.root.lift()
                 self.root.focus_force()
             except Exception:
-                pass
+                app_log.get_logger().exception("could not raise the main window")
+            # Whatever happened above, make sure it can be seen once Windows has placed it.
+            self.root.after(400, self.verify_visible)
 
         if not use_splash:
             # Reveal from an after() callback (see below): maximizing before
@@ -270,6 +284,7 @@ class QRCodeStudioApp:
             # the original crash (Scene.__init__ raised on every launch and the
             # splash simply never started, with no traceback anywhere).
             traceback.print_exc()
+            app_log.get_logger().exception("the intro could not start")
             started[0] = False
             if splash is not None:
                 try:

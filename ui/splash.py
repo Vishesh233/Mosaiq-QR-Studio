@@ -1614,6 +1614,8 @@ class Splash:
                 self.on_done()
             except Exception:
                 traceback.print_exc()
+                from utils import app_log
+                app_log.get_logger().exception("showing the main window failed")
         if self.win is not None:
             try:
                 self._after_id = self.win.after(HANDOFF_MS, self.stop)

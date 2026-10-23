@@ -81,6 +81,8 @@ def test_dialog():
     from ui.dialogs.color_picker import ColorPickerDialog
     from utils import colors
 
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     root.geometry("1280x820+-30000+-30000")

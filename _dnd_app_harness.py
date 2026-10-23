@@ -19,6 +19,8 @@ from ui.app import QRCodeStudioApp
 
 state_path, cmd_path = sys.argv[1], sys.argv[2]
 
+import _test_dialogs
+_test_dialogs.install()
 app = QRCodeStudioApp()
 root = app.root
 sp = app.scan_page

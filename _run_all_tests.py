@@ -30,6 +30,13 @@ def _kill_group(job):
     win32job.TerminateJobObject(job, 1)
 
 
+def _left_running(job):
+    """How many processes of the test's tree are still alive (the test itself has ended)."""
+    import win32job
+    info = win32job.QueryInformationJobObject(job, win32job.JobObjectBasicProcessIdList)
+    return len(info)
+
+
 def run(script):
     import win32api
     import win32con
@@ -45,9 +52,12 @@ def run(script):
                                 stdout=sink, stderr=subprocess.STDOUT)
         handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, proc.pid)
         win32job.AssignProcessToJobObject(job, handle)
+        leftover = 0
         try:
             code = proc.wait(timeout=SLOW_TIMEOUT)
             timed_out = False
+            time.sleep(0.5)                  # let a clean exit finish
+            leftover = _left_running(job)
         except subprocess.TimeoutExpired:
             code, timed_out = -1, True
         finally:
@@ -57,6 +67,10 @@ def run(script):
         output = sink.read().decode("utf-8", errors="replace")
     if timed_out:
         output = f"TIMEOUT after {SLOW_TIMEOUT}s\n" + output
+    if leftover:
+        # A test that leaves a window or helper process running fails even when its checks passed.
+        output += f"\nLEFTOVER: {leftover} process(es) of this test were still running after it ended\n"
+        code = code or 3
     lines = [ln for ln in output.splitlines() if ln.strip()]
     ok_line = next((ln for ln in reversed(lines) if "_OK" in ln or "PASSED" in ln), "")
     return code, ok_line, lines[-3:], time.time() - started

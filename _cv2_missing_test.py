@@ -60,6 +60,8 @@ def worker(mode, log_dir):
     QRGenerator().generate(text).save(path)
 
     from ui.app import QRCodeStudioApp
+    import _test_dialogs
+    _test_dialogs.install()
     app = QRCodeStudioApp()
     root = app.root
     root.withdraw()
