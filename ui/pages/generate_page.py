@@ -4,8 +4,10 @@ from ui.components.content_card import ContentCard
 from ui.components.design_card import DesignCard
 from ui.components.preview_card import PreviewCard
 from ui.layout import CARD_GAP, TwoColumnPage
-from utils import filenames, qr_export, self_check
+from utils import filenames, history_store, qr_export, self_check
+from utils.app_log import get_logger
 from utils.qr_generator import QRGenerator
+from utils.qr_render import QRStyle
 from utils.clipboard import ClipboardManager
 from tkinter import messagebox
 from tkinter import filedialog
@@ -141,12 +143,54 @@ class GeneratePage(TwoColumnPage):
                 "QR Generation Failed",
                 str(e)
             )
+            return
+
+        self._remember(data)
+
+    def _remember(self, data):
+        """Keep the code that was just generated in the history (not live redraws)."""
+        try:
+            history_store.add_generated(
+                self.content_card.active_type, data, self.content_card.get_fields(),
+                self.generated_style, self.generated_logo, self.generated_image)
+        except OSError:
+            get_logger().exception("could not save the code to the history")
+
+    # ------------------------------------------------------------------
+    # From the History page
+    # ------------------------------------------------------------------
+
+    def open_entry(self, entry, remember=False):
+        """Show a saved code: its form, look and picture. Nothing is saved unless ``remember``.
+
+        A WiFi code saved without its password fills the form and asks for the password."""
+        generated = entry["kind"] == history_store.GENERATED
+        if generated:
+            self.content_card.load(entry["type"], entry.get("fields") or {})
+            self.design_card.load(QRStyle.from_dict(entry.get("style")), entry.get("logo") or None)
+        else:
+            self.content_card.load("URL / Text", {"url": entry["text"]})
+            self.design_card.reset()
+        if generated and entry.get("redacted"):
+            self._reset_preview()
+            messagebox.showwarning(
+                "Password needed",
+                "This WiFi code was saved without its password. Enter the password, "
+                "then press Generate.")
+            return
+        try:
+            self._show(entry["text"])
+        except Exception as e:
+            messagebox.showerror("QR Generation Failed", str(e))
+            return
+        if remember:
+            self._remember(entry["text"])
+
+    def regenerate_entry(self, entry):
+        """Draw a saved code again and add it to the history as a new entry."""
+        self.open_entry(entry, remember=True)
 
     def clear_form(self):
-
-        if self._refresh_job is not None:
-            self.after_cancel(self._refresh_job)
-            self._refresh_job = None
 
         # Clear entries
         self.content_card.clear()
@@ -154,20 +198,25 @@ class GeneratePage(TwoColumnPage):
         # Reset colours, style and logo
         self.design_card.reset()
 
-        # Reset preview (and forget a test scan still running)
+        self._reset_preview()
+
+    def _reset_preview(self):
+        """Empty the preview and forget the generated code (the form is left as it is)."""
+        if self._refresh_job is not None:
+            self.after_cancel(self._refresh_job)
+            self._refresh_job = None
+        # Forget a test scan still running
         self._checker.cancel()
         if self._check_job is not None:
             self.after_cancel(self._check_job)
             self._check_job = None
         self.preview_card.clear_preview()
 
-        # Remove generated image
         self.generated_image = None
         self.generated_data = None
         self.generated_style = None
         self.generated_logo = None
 
-        # Disable buttons
         self.action_buttons.disable_export_buttons()
 
     def copy_qr(self):

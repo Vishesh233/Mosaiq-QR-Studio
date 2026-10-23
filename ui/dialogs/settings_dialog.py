@@ -1,6 +1,7 @@
 import customtkinter as ctk
+from tkinter import messagebox
 
-from utils import settings_store
+from utils import history_store, settings_store
 from utils.theme_manager import ThemeManager
 from ui import icons
 from ui.brand_logo import apply_window_icon
@@ -26,7 +27,8 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self.title("Settings")
         apply_window_icon(self)
-        self.geometry("760x660")
+        height = min(900, max(520, self.winfo_screenheight() - 140))
+        self.geometry(f"760x{height}")
         self.resizable(False, False)
 
         # Modal behaviour + clean focus return to the parent window.
@@ -38,8 +40,12 @@ class SettingsDialog(ctk.CTkToplevel):
             value=bool(settings_store.get("splash_enabled", True))
         )
 
+        self.history_var = ctk.BooleanVar(value=history_store.enabled())
+        self.wifi_var = ctk.BooleanVar(value=history_store.save_wifi_passwords())
+
         self._build_ui()
         self._refresh_selection()
+        self._update_history_count()
 
     # ======================================================
 
@@ -64,9 +70,15 @@ class SettingsDialog(ctk.CTkToplevel):
         self.container = ctk.CTkFrame(self, fg_color=theme["background"], bg_color=theme["background"], corner_radius=0)
         self.container.pack(fill="both", expand=True)
 
+        # Bottom buttons first so they stay visible; everything else scrolls above them.
+        button_frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        button_frame.pack(side="bottom", fill="x", padx=30, pady=(8, 20))
+        self.body = ctk.CTkScrollableFrame(self.container, fg_color="transparent", corner_radius=0)
+        self.body.pack(fill="both", expand=True)
+
         # ---------------- Title ---------------- #
 
-        title_row = ctk.CTkFrame(self.container, fg_color="transparent")
+        title_row = ctk.CTkFrame(self.body, fg_color="transparent")
         title_row.pack(anchor="w", padx=30, pady=(24, 2))
 
         ctk.CTkLabel(
@@ -84,7 +96,7 @@ class SettingsDialog(ctk.CTkToplevel):
         ).pack(side="left")
 
         ctk.CTkLabel(
-            self.container,
+            self.body,
             text="Personalise how Mosaiq looks. Themes preview instantly.",
             font=("Segoe UI", 13),
             text_color=theme["text_secondary"],
@@ -94,7 +106,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self._section("THEME")
 
-        grid = ctk.CTkFrame(self.container, fg_color="transparent")
+        grid = ctk.CTkFrame(self.body, fg_color="transparent")
         grid.pack(fill="x", padx=24)
         for col in range(self.TILE_COLUMNS):
             grid.grid_columnconfigure(col, weight=1, uniform="tiles")
@@ -110,7 +122,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self._section("STARTUP", pady=(22, 8))
 
         startup = ctk.CTkFrame(
-            self.container, fg_color=theme["card"], corner_radius=12,
+            self.body, fg_color=theme["card"], corner_radius=12,
             border_width=1, border_color=theme["border"],
         )
         startup.pack(fill="x", padx=30)
@@ -136,10 +148,32 @@ class SettingsDialog(ctk.CTkToplevel):
             text_color=theme["text"],
         ).pack(side="right", padx=18)
 
-        # ---------------- Bottom Buttons ---------------- #
+        # ---------------- History ---------------- #
 
-        button_frame = ctk.CTkFrame(self.container, fg_color="transparent")
-        button_frame.pack(side="bottom", fill="x", padx=30, pady=24)
+        self._section("HISTORY", pady=(22, 8))
+        history = ctk.CTkFrame(
+            self.body, fg_color=theme["card"], corner_radius=12,
+            border_width=1, border_color=theme["border"],
+        )
+        history.pack(fill="x", padx=30)
+        self._switch_row(history, "Save history",
+                         "Keep the codes you generate and scan on this PC.", self.history_var)
+        self._switch_row(history, "Save WiFi passwords in history",
+                         "Off by default. When off, WiFi codes are kept without their password "
+                         "and without a picture.", self.wifi_var)
+        clear_row = ctk.CTkFrame(history, fg_color="transparent")
+        clear_row.pack(fill="x", padx=18, pady=(10, 14))
+        self.history_count = ctk.CTkLabel(
+            clear_row, text="", font=("Segoe UI", 12), text_color=theme["text_secondary"])
+        self.history_count.pack(side="left")
+        self.clear_button = ctk.CTkButton(
+            clear_row, text="Clear history", width=130, height=34, corner_radius=10,
+            fg_color="transparent", border_width=1, border_color=theme["border"],
+            hover_color=theme["card_hover"], text_color=theme["danger"],
+            text_color_disabled=theme["text_muted"], command=self._clear_history)
+        self.clear_button.pack(side="right")
+
+        # ---------------- Bottom Buttons ---------------- #
 
         ctk.CTkButton(
             button_frame,
@@ -164,9 +198,44 @@ class SettingsDialog(ctk.CTkToplevel):
             command=self.apply,
         ).pack(side="right", padx=(0, 12))
 
+    def _switch_row(self, parent, title, subtitle, variable):
+        theme = ThemeManager.get_theme()
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=18, pady=(14, 0))
+        text_col = ctk.CTkFrame(row, fg_color="transparent")
+        text_col.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(text_col, text=title, anchor="w", font=("Segoe UI Semibold", 14),
+                     text_color=theme["text"]).pack(fill="x")
+        ctk.CTkLabel(text_col, text=subtitle, anchor="w", justify="left", wraplength=470,
+                     font=("Segoe UI", 12), text_color=theme["text_secondary"]).pack(fill="x")
+        ctk.CTkSwitch(
+            row, text="", variable=variable, onvalue=True, offvalue=False, width=52,
+            progress_color=theme["primary"], button_color=theme["text"],
+            button_hover_color=theme["text_secondary"], fg_color=theme["scrollbar"],
+            text_color=theme["text"]).pack(side="right", padx=(12, 0))
+
+    def _update_history_count(self):
+        count = history_store.count()
+        self.history_count.configure(
+            text=f"{count} saved" if count else "No saved codes")
+        self.clear_button.configure(state="normal" if count else "disabled")
+
+    def _clear_history(self):
+        count = history_store.count()
+        if not messagebox.askyesno(
+                "Clear history",
+                f"Remove all {count} saved codes and their previews from this PC?\n\n"
+                f"This cannot be undone."):
+            return
+        history_store.clear()
+        app = self._find_app()
+        if app is not None and hasattr(app, "history_page"):
+            app.history_page.refresh()
+        self._update_history_count()
+
     def _section(self, text, pady=(0, 8)):
         ctk.CTkLabel(
-            self.container, text=text,
+            self.body, text=text,
             font=("Segoe UI Semibold", 11),
             text_color=ThemeManager.get_theme()["text_secondary"],
         ).pack(anchor="w", padx=30, pady=pady)
@@ -275,6 +344,11 @@ class SettingsDialog(ctk.CTkToplevel):
     def apply(self):
         ThemeManager.set_theme(self._selected)
         settings_store.set("splash_enabled", bool(self.splash_var.get()))
+        history_store.set_enabled(self.history_var.get())
+        history_store.set_save_wifi_passwords(self.wifi_var.get())
+        app = self._find_app()
+        if app is not None and hasattr(app, "history_page"):
+            app.history_page.refresh()
         self.destroy()
 
     def cancel(self):

@@ -5,6 +5,7 @@ from ui.header import Header
 from ui.sidebar import Sidebar
 from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
+from ui.pages.history_page import HistoryPage
 from ui.splash import Splash, splash_disabled
 from ui.brand_logo import apply_window_icon
 from ui.dnd_support import create_root
@@ -38,6 +39,10 @@ class QRCodeStudioApp:
         "scan": (
             "Scan a QR code",
             "Decode links, text, UPI, WiFi, contacts, email and SMS.",
+        ),
+        "history": (
+            "History",
+            "Codes you generated and scanned on this PC.",
         ),
     }
 
@@ -103,8 +108,11 @@ class QRCodeStudioApp:
         self.generate_page = GeneratePage(self.body)
         self.scan_page = ScanPage(self.body)
         self.scan_page.enable_drop(self.dnd_error)
+        self.history_page = HistoryPage(self.body, on_open=self.open_history_entry,
+                                        on_regenerate=self.regenerate_history_entry)
 
-        self._pages = {"generate": self.generate_page, "scan": self.scan_page}
+        self._pages = {"generate": self.generate_page, "scan": self.scan_page,
+                       "history": self.history_page}
         self._current_page = None
         self._show_page("generate")
 
@@ -114,6 +122,7 @@ class QRCodeStudioApp:
 
         self.sidebar.add_nav_item("generate", "Generate", "generate", self.show_generate_page)
         self.sidebar.add_nav_item("scan", "Scan QR", "scan", self.show_scan_page)
+        self.sidebar.add_nav_item("history", "History", "history", self.show_history_page)
 
         # Closing the window must release the camera before the app exits.
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -148,6 +157,24 @@ class QRCodeStudioApp:
     def show_scan_page(self):
         self._show_page("scan")
 
+    def show_history_page(self):
+        self.history_page.refresh()
+        self._show_page("history")
+
+    def open_history_entry(self, entry):
+        """Open a saved code where it belongs: generated ones in Generate, scanned ones in Scan."""
+        if entry["kind"] == "generated":
+            self.show_generate_page()
+            self.generate_page.open_entry(entry)
+        else:
+            self.show_scan_page()
+            self.scan_page.show_saved(entry["text"])
+
+    def regenerate_history_entry(self, entry):
+        """Generate a saved code again (and keep it as a new history entry)."""
+        self.show_generate_page()
+        self.generate_page.regenerate_entry(entry)
+
     # ==================================================
 
     def refresh_theme(self):
@@ -172,6 +199,7 @@ class QRCodeStudioApp:
             self.generate_page.refresh_theme()
         if hasattr(self.scan_page, "refresh_theme"):
             self.scan_page.refresh_theme()
+        self.history_page.refresh_theme()
 
         self.root.update_idletasks()
 

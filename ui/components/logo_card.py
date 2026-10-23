@@ -109,6 +109,12 @@ class LogoCard(ctk.CTkFrame):
         """The chosen logo size as a fraction of the code width."""
         return self.logo_scale
 
+    def set_scale(self, scale):
+        """Use a saved logo size (kept within the safe limit)."""
+        self.logo_scale = min(max(scale, MIN_PERCENT / 100), self.limit)
+        self.size_slider.set(self.logo_scale * 100)
+        self._update_size_labels()
+
     def _percent(self):
         return int(round(self.logo_scale * 100))
 

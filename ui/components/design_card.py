@@ -1,3 +1,5 @@
+import os
+
 import customtkinter as ctk
 
 from ui.components.color_card import ColorCard
@@ -93,6 +95,23 @@ class DesignCard(SectionCard):
         base = QRStyle(fg=self.colours.get_qr_color(), bg=self.colours.get_bg_color(),
                        logo_scale=self.logo.get_logo_scale())
         return self.style.apply_to(base)
+
+    def load(self, style, logo_path=None):
+        """Show a saved look: colours, shapes, gradient, logo and logo size (one preview refresh).
+        A logo file that is gone is dropped."""
+        callback, self.change_callback = self.change_callback, None
+        try:
+            self.colours.set_colors(qr=style.fg, bg=style.bg)
+            self.style.set_style(module_shape=style.module_shape, eye_shape=style.eye_shape,
+                                 gradient=style.gradient, gradient_end=style.fg2)
+            if logo_path and os.path.exists(logo_path):
+                self.logo.set_logo(logo_path)
+                self.logo.set_scale(style.logo_scale)
+            else:
+                self.logo.reset_logo()
+        finally:
+            self.change_callback = callback
+        self._update_state()
 
     def reset(self):
         """Back to black on white, plain shapes, no logo (one preview refresh)."""

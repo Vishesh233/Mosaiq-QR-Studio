@@ -4,9 +4,12 @@ import traceback
 import customtkinter as ctk
 
 from ui.layout import TwoColumnPage
+from ui.pages import history_page
 from ui.components.scan_upload_card import ScanUploadCard
 from ui.components.scan_result_card import ScanResultCard
-from utils import cv_loader
+from utils import cv_loader, history_store, qr_payloads
+from utils.app_log import get_logger
+from utils.qr_generator import QRGenerator
 from utils.qr_scanner import QRScanner, ScanError
 from utils.scan_errors import ScannerUnavailable
 from PIL import Image
@@ -84,9 +87,31 @@ class ScanPage(TwoColumnPage):
             return
 
         if result:
-            self.result_card.set_result(result)
+            self._show_result(result)
         else:
             self.result_card.set_message(self.NOT_FOUND)
+
+    def _show_result(self, text):
+        """Show a decoded text and keep it in the history."""
+        self.result_card.set_result(text)
+        self._remember(text)
+
+    def _remember(self, text):
+        parsed = qr_payloads.parse(text)
+        try:
+            picture = QRGenerator().generate(text)       # a drawing of the text, not the scanned photo
+        except ValueError:
+            picture = None                               # too long to draw
+        try:
+            history_store.add_scanned(text, history_page.type_for_kind(parsed.kind), picture)
+        except OSError:
+            get_logger().exception("could not save the scan to the history")
+
+    def show_saved(self, text):
+        """Show a code from the history again (it is not saved a second time)."""
+        self.stop_camera()
+        self.upload_card.clear()
+        self.result_card.set_result(text)
 
     # ==================================================
     # Camera
@@ -154,7 +179,7 @@ class ScanPage(TwoColumnPage):
         if captured is not None:
             self.upload_card.show_image(Image.fromarray(captured), "Camera capture")
 
-        self.result_card.set_result(text)
+        self._show_result(text)
 
     def _camera_failed(self, message):
 
@@ -317,7 +342,7 @@ class ScanPage(TwoColumnPage):
             return
 
         if result:
-            self.result_card.set_result(result)
+            self._show_result(result)
         else:
             self.result_card.set_message(self.NOT_FOUND)
 
