@@ -106,6 +106,11 @@ def main():
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
         pump(0.5)
         left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width, height = right - left, bottom - top
+        # Positions in the 2.2 layout (physical px, window-relative): the four source tiles share
+        # the left card, the pinned buttons sit at the bottom of the right column.
+        region_tile = (365 + int((width - 555 - 365) * 0.625), 233)
+        button_x, button_y = width - 280, height - 142
 
         # ---- open the Scan page (verified from the window's own pixels) ----
         header = (380, 250, 1290, 340)
@@ -137,7 +142,7 @@ def main():
         # ---- Screen Region: app hides, overlay appears, drag around the QR ----
         hidden = False
         for attempt in range(4):
-            click(left + 1030, top + 322)
+            click(left + region_tile[0], top + region_tile[1])
             if wait_for(lambda: not win32gui.IsWindowVisible(hwnd), 2.5):
                 hidden = True
                 break
@@ -178,7 +183,7 @@ def main():
 
         # ---- the crop that came back: read it from the exe window itself ----
         shot = wc.capture_window(hwnd)
-        decoded = QRScanner.decode_image(shot.crop((350, 250, 1300, 900)))
+        decoded = QRScanner.decode_image(shot.crop((350, 230, width - 540, 660)))
         check("the preview in the exe holds the whole QR (it decodes)", decoded == text, repr(decoded))
 
         # ---- the exe's own result: press "Copy password" and read the clipboard ----
@@ -199,7 +204,7 @@ def main():
 
         clipboard_text()
         got = None
-        for x, y in ((1595, 668), (1595, 690), (1595, 650)):
+        for x, y in ((button_x, button_y), (button_x, button_y + 14), (button_x, button_y - 14)):
             click(left + x, top + y)
             for _ in range(10):
                 try:

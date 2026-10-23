@@ -219,4 +219,19 @@ Smart App Control warnings.
    also declares the `webcam` capability (live scanning); see `packaging\msix\STORE_LISTING.md`.
 4. Raise `Version` in `identity.json` for every new upload (the last part stays `0`).
 
+### Before uploading: package checks
+
+`dist\` holds only the current build: `MosaiqQRStudio\` (the app), the current
+`MosaiqQRStudio-<version>-x64.msix` and `old\` (earlier builds and packages, kept so the wrong
+file is never uploaded by mistake). `build.ps1` rebuilds only `dist\MosaiqQRStudio` and `dist\msix`.
+
+1. `.venv\Scripts\python.exe _run_all_tests.py` (add `--exe` after building: it runs `_frozen_exe_test.py`).
+2. `.venv\Scripts\python.exe _installed_app_test.py exe` drives the built exe (generate, scan, close;
+   it moves the mouse, so keep your hands off).
+3. From an **Administrator** PowerShell: `.\packaging\msix\install_test.ps1`. It signs a throw-away COPY of
+   the package with a temporary certificate, runs the Windows App Certification Kit on it, installs it,
+   runs the same generate-and-scan check in the installed app, uninstalls it and removes the certificate.
+   The real `.msix` stays unsigned. It stops if Mosaiq is already installed (it will not replace a Store
+   install). The report is written to `dist\install-test-report.txt`.
+
 Test the Store-signed build through a private audience before making the listing public.

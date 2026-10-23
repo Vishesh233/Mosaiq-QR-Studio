@@ -19,7 +19,7 @@ if (-not (Test-Path -LiteralPath $venvPy)) {
 Write-Host "==> Python: $(& $venvPy --version 2>&1)"
 
 Write-Host "==> Installing / upgrading PyInstaller..."
-& $venvPy -m pip install --upgrade pyinstaller
+& $venvPy -m pip install --upgrade --disable-pip-version-check pyinstaller
 
 Write-Host "==> Cleaning previous build artifacts..."
 Remove-Item -LiteralPath (Join-Path $root "build") -Recurse -Force -ErrorAction SilentlyContinue
