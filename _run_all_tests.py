@@ -2,9 +2,9 @@
 
 Run:  .venv\\Scripts\\python.exe _run_all_tests.py [--exe] [--skip-desktop]
 
---exe           also run _frozen_exe_test.py (needs a build first)
+--exe           also run _frozen_exe_test.py and _installed_app_test.py (need a build first)
 --skip-desktop  skip the tests that use the real webcam, grab the screen or move the mouse
-                (_camera_test, _region_test, _dnd_test)
+                (_camera_test, _region_test, _dnd_test, _installed_app_test)
 
 _dnd_test drives the real mouse and is focus/timing sensitive (it also fails now and then on
 the unchanged code): a failing run is retried up to twice and every failed attempt is printed.
@@ -18,7 +18,8 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DESKTOP = {"_camera_test.py", "_region_test.py", "_dnd_test.py"}
+DESKTOP = {"_camera_test.py", "_region_test.py", "_dnd_test.py", "_installed_app_test.py"}
+EXE_TESTS = {"_frozen_exe_test.py", "_installed_app_test.py"}          # need a build first
 RETRY = {"_dnd_test.py"}
 SLOW_TIMEOUT = 420
 TIMEOUTS = {"_theme_contrast_test.py": 1200}      # every theme change on every page
@@ -81,7 +82,7 @@ def main():
     args = set(sys.argv[1:])
     scripts = sorted(os.path.basename(p) for p in glob.glob(os.path.join(HERE, "_*_test.py")))
     if "--exe" not in args:
-        scripts = [s for s in scripts if s != "_frozen_exe_test.py"]
+        scripts = [s for s in scripts if s not in EXE_TESTS]
     if "--skip-desktop" in args:
         scripts = [s for s in scripts if s not in DESKTOP]
 
