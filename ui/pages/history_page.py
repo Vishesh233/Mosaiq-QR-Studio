@@ -3,10 +3,10 @@ import datetime
 import os
 
 import customtkinter as ctk
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ui.layout import CARD_GAP, CARD_PAD, Card, SectionCard, TwoColumnPage, autohide_scrollbar
-from ui.line_icons import line_icon
+from ui.line_icons import render as line_icon_image
 from ui.widgets import ModernSegmented
 from utils import history_store, qr_payloads
 from utils.qr_generator import QRGenerator
@@ -185,8 +185,18 @@ class HistoryPage(TwoColumnPage):
                 return ctk.CTkImage(light_image=image, dark_image=image, size=(THUMB, THUMB))
             except OSError:
                 pass            # a damaged preview shows the type icon instead
-        icon = TYPE_ICONS.get(entry["type"], "url")
-        return line_icon(icon, ThemeManager.get_theme()["text_secondary"], 26)
+        # No picture saved (WiFi without its password): the type icon on a tile of the same size,
+        # so every row lines up.
+        theme = ThemeManager.get_theme()
+        scale = 4
+        box = THUMB * 2 * scale
+        tile = Image.new("RGBA", (box, box), (0, 0, 0, 0))
+        ImageDraw.Draw(tile).rounded_rectangle((0, 0, box - 1, box - 1), radius=8 * 2 * scale,
+                                               fill=theme["card"], outline=theme["border"], width=scale * 2)
+        glyph = line_icon_image(TYPE_ICONS.get(entry["type"], "url"), theme["text_secondary"], 26 * 2 * scale)
+        tile.paste(glyph, ((box - glyph.width) // 2, (box - glyph.height) // 2), glyph)
+        tile = tile.resize((THUMB * 2, THUMB * 2), Image.Resampling.LANCZOS)
+        return ctk.CTkImage(light_image=tile, dark_image=tile, size=(THUMB, THUMB))
 
     # ------------------------------------------------------------------ list
 

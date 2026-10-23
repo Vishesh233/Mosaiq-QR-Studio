@@ -115,6 +115,22 @@ def main():
           __import__("utils.theme_manager", fromlist=["ThemeManager"]).ThemeManager
           .get_theme()["danger"].upper())
 
+    # ---- a "Copied" flash must not put an old label back on a newer result ----
+    import time as _time
+    rc.set_result(qr_payloads.build_upi("shop@okaxis", "Corner Shop", "10", ""))
+    settle()
+    rc._press(0)                                   # copies and flashes "Copied" for 1.2 s
+    check("button flashes Copied", "Copied" in rc.copy_btn.cget("text"), rc.copy_btn.cget("text"))
+    rc.set_result("+919876543210")                 # another result arrives within the flash
+    wanted = rc.copy_btn.cget("text")
+    end = _time.time() + 1.6
+    while _time.time() < end:
+        root.update()
+        _time.sleep(0.02)
+    check("the new result keeps its own button label", rc.copy_btn.cget("text") == wanted
+          and "UPI" not in rc.copy_btn.cget("text"), f"{wanted!r} -> {rc.copy_btn.cget('text')!r}")
+    rc.clear()
+
     # ---- secrets are masked until clicked ----
     secret = "hunter2-pass"
     rc.set_result(qr_payloads.build_wifi("Guest Net", secret, "WPA"))

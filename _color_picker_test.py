@@ -95,6 +95,11 @@ def test_dialog():
     dlg = ColorPickerDialog(app.header, "#0E7490", "Test")
     settle()
     check("opens on the initial colour", dlg.color == "#0E7490" and dlg.hex_entry.get() == "#0E7490")
+    gap = dlg.hex_label.winfo_rootx() - (dlg.current_label.winfo_rootx() + dlg.current_label.winfo_width())
+    check("CURRENT / NEW and HEX labels have room between them", gap >= 20, f"{gap} px")
+    check("the HEX and RGB fields fit inside the dialog",
+          dlg.rgb_entries[-1].winfo_rootx() + dlg.rgb_entries[-1].winfo_width()
+          <= dlg.winfo_rootx() + dlg.winfo_width(), "fields run past the window edge")
     check("rgb fields match", [e.get() for e in dlg.rgb_entries] == ["14", "116", "144"],
           repr([e.get() for e in dlg.rgb_entries]))
 

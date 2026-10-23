@@ -176,6 +176,32 @@ def test_ui():
     check("hint starts with good contrast", qr_checks.GOOD_TEXT in card.hint.cget("text"))
     check("Classic highlighted at start", card.colours.preset_row._selected == "Classic")
 
+    # the selection ring is part of the tile's picture: whole ring visible on every side
+    from ui.components import color_card as cc
+    from utils import colors as colour_maths
+    ring = theme["primary"]
+    style = qr_presets.get("Classic").style
+    shown = cc._tile_image(style, ring).convert("RGBA")
+    mid, edge = shown.height // 2, 4
+    ring_rgb = colour_maths.hex_to_rgb(ring)
+
+    def is_ring(px):
+        return px[3] > 200 and max(abs(px[i] - ring_rgb[i]) for i in range(3)) < 40
+
+    sides = {"left": shown.getpixel((edge, mid)), "right": shown.getpixel((shown.width - 1 - edge, mid)),
+             "top": shown.getpixel((mid, edge)), "bottom": shown.getpixel((mid, shown.height - 1 - edge))}
+    check("ring drawn on all four sides", all(is_ring(p) for p in sides.values()), str(sides))
+    check("no ring on an unselected tile", shown.getpixel((edge, mid)) != cc._tile_image(style, None).convert("RGBA").getpixel((edge, mid)))
+    tile = card.colours.preset_row._frames["Classic"]
+    root.update()
+    check("the tile is big enough for its whole picture",
+          tile.winfo_width() >= cc.TILE and tile.winfo_height() >= cc.TILE,
+          f"{tile.winfo_width()}x{tile.winfo_height()}")
+    plain, selected = card.colours.preset_row._images["Classic"]
+    check("selected tile shows the ring picture", tile.cget("image") is selected)
+    check("another tile shows the plain picture",
+          card.colours.preset_row._frames["Ocean"].cget("image") is card.colours.preset_row._images["Ocean"][0])
+
     gp.content_card.url_entry.insert(0, "https://example.com/presets")
     gp.generate_qr()
     redraws = []

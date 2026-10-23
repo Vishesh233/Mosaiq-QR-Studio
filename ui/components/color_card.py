@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ui.dialogs.color_picker import pick_color
 from utils import colors, qr_presets
@@ -18,51 +18,77 @@ def _chip_image(style, size=40):
     return Image.fromarray(np.clip(pixels + 0.5, 0, 255).astype("uint8"))
 
 
+TILE = 52          # logical px of one preset tile (chip plus selection ring)
+
+
+def _tile_image(style, ring):
+    """A preset chip with a rounded selection ring around it, drawn together so that no part
+    of the ring can be covered by another widget. ``ring`` is a hex colour, or None for no ring.
+    Rendered at 4x and reduced, for smooth corners."""
+    scale = 4
+    size = TILE * scale
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    if ring:
+        draw.rounded_rectangle((scale, scale, size - scale - 1, size - scale - 1),
+                               radius=14 * scale, outline=ring, width=2 * scale)
+    inset = 7 * scale
+    chip = _chip_image(style, size - 2 * inset)
+    mask = Image.new("L", chip.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, chip.width - 1, chip.height - 1),
+                                           radius=9 * scale, fill=255)
+    image.paste(chip, (inset, inset), mask)
+    return image.resize((TILE * 2, TILE * 2), Image.Resampling.LANCZOS)
+
+
 class PresetRow(ctk.CTkFrame):
     """One-click colour + style combinations."""
 
     def __init__(self, parent, command):
         super().__init__(parent, fg_color="transparent")
         self._command = command
-        self._frames = {}
+        self._frames = {}           # name -> the clickable tile (a label showing the picture)
         self._captions = {}
-        self._images = []           # kept: a label raises TclError if its CTkImage is collected
+        self._images = {}           # name -> (plain, selected); kept: a label raises TclError if its image is collected
+        self._selected = None
         theme = ThemeManager.get_theme()
         for column, preset in enumerate(qr_presets.PRESETS):
             holder = ctk.CTkFrame(self, fg_color="transparent")
-            holder.grid(row=0, column=column, padx=(0, 10))
-            frame = ctk.CTkFrame(holder, width=48, height=48, corner_radius=12,
-                                 border_width=2, border_color=theme["card"],
-                                 fg_color=theme["card"])
-            frame.pack()
-            frame.pack_propagate(False)
-            image = ctk.CTkImage(light_image=_chip_image(preset.style),
-                                 dark_image=_chip_image(preset.style), size=(38, 38))
-            self._images.append(image)
-            chip = ctk.CTkLabel(frame, text="", image=image, corner_radius=10,
+            holder.grid(row=0, column=column, padx=(0, 6))
+            tile = ctk.CTkLabel(holder, text="", width=TILE, height=TILE, fg_color="transparent",
                                 text_color=theme["text"])
-            chip.place(relx=0.5, rely=0.5, anchor="center")
+            tile.pack()
             caption = ctk.CTkLabel(holder, text=preset.name, font=("Segoe UI", 11),
                                    text_color=theme["text_secondary"])
-            caption.pack(pady=(4, 0))
-            for widget in (frame, chip, caption, holder):
+            caption.pack(pady=(2, 0))
+            for widget in (tile, caption, holder):
                 widget.bind("<Button-1>", lambda _e, n=preset.name: self._command(n))
-            self._frames[preset.name] = frame
+            self._frames[preset.name] = tile
             self._captions[preset.name] = caption
+        self._draw_tiles()
+
+    def _draw_tiles(self):
+        """(Re)draw every tile: the ring colour follows the theme."""
+        ring = ThemeManager.get_theme()["primary"]
+        self._images = {}
+        for preset in qr_presets.PRESETS:
+            pair = tuple(ctk.CTkImage(light_image=_tile_image(preset.style, color),
+                                      dark_image=_tile_image(preset.style, color), size=(TILE, TILE))
+                         for color in (None, ring))
+            self._images[preset.name] = pair
+        self.set_selected(self._selected)
 
     def set_selected(self, name):
         theme = ThemeManager.get_theme()
-        for key, frame in self._frames.items():
-            frame.configure(border_color=theme["primary"] if key == name else theme["card"])
+        for key, tile in self._frames.items():
+            plain, selected = self._images[key]
+            tile.configure(image=selected if key == name else plain)
             self._captions[key].configure(
                 text_color=theme["text"] if key == name else theme["text_secondary"])
         self._selected = name
 
     def refresh_theme(self):
-        self.set_selected(getattr(self, "_selected", None))
-        theme = ThemeManager.get_theme()
-        for frame in self._frames.values():
-            frame.configure(fg_color=theme["card"])
+        self._draw_tiles()
 
 
 class ColorCard(ctk.CTkFrame):

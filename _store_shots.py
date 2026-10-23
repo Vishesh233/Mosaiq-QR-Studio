@@ -124,7 +124,8 @@ def _one(name, outdir):
         gp.design_card.apply_preset("Ocean")
         app.show_bulk_page()
         app.bulk_page.load_csv(sample)
-        app.bulk_page.folder_entry.insert(0, r"C:\Users\you\Documents\QR codes")
+        app.bulk_page.folder_entry.delete(0, "end")        # public pictures: no real user name
+        app.bulk_page.folder_entry.insert(0, r"C:\Users\Public\Documents\QR codes")
         app.bulk_page._update_summary()
         save()
     elif name == "theme_settings":

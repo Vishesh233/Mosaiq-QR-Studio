@@ -23,7 +23,9 @@ Write-Host "==> Installing / upgrading PyInstaller..."
 
 Write-Host "==> Cleaning previous build artifacts..."
 Remove-Item -LiteralPath (Join-Path $root "build") -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath (Join-Path $root "dist")  -Recurse -Force -ErrorAction SilentlyContinue
+# Only the app folder and the MSIX work folder are rebuilt. Older packages and dist\old are kept.
+Remove-Item -LiteralPath (Join-Path $root "dist\MosaiqQRStudio") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $root "dist\msix") -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "==> Building with PyInstaller (QRCodeStudio.spec)..."
 Push-Location $root

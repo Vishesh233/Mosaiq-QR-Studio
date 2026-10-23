@@ -294,6 +294,7 @@ class ScanResultCard(SectionCard):
     def _set_buttons(self, plan):
         """Show up to two buttons; the first is the primary one."""
 
+        self._cancel_flashes()                   # a "Copied" timer must not put an old label back
         self.button_plan = plan
         self.action = None
 
@@ -332,8 +333,19 @@ class ScanResultCard(SectionCard):
 
     def _flash(self, button, original_text):
         """Briefly confirm a copy on the button itself."""
+        self._cancel_flashes()
         button.configure(text="Copied")
-        self.after(1200, lambda: button.configure(text=original_text))
+        self._flash_job = self.after(1200, lambda: self._unflash(button, original_text))
+
+    def _unflash(self, button, original_text):
+        self._flash_job = None
+        button.configure(text=original_text)
+
+    def _cancel_flashes(self):
+        job = getattr(self, "_flash_job", None)
+        if job is not None:
+            self.after_cancel(job)
+            self._flash_job = None
 
     # ==================================================
 

@@ -112,7 +112,8 @@ class ColorPickerDialog(ctk.CTkToplevel):
 
         preview = ctk.CTkFrame(row, fg_color="transparent")
         preview.pack(side="left")
-        self._label(preview, "CURRENT   →   NEW").pack(anchor="w")
+        self.current_label = self._label(preview, "CURRENT → NEW")
+        self.current_label.pack(anchor="w")
         swatches = ctk.CTkFrame(preview, fg_color="transparent")
         swatches.pack(anchor="w", pady=(4, 0))
         self.old_swatch = ctk.CTkFrame(swatches, width=52, height=44, corner_radius=8,
@@ -129,12 +130,13 @@ class ColorPickerDialog(ctk.CTkToplevel):
         self.old_swatch.configure(cursor="hand2")
 
         fields = ctk.CTkFrame(row, fg_color="transparent")
-        fields.pack(side="right")
+        fields.pack(side="right", padx=(24, 0))
 
         hex_box = ctk.CTkFrame(fields, fg_color="transparent")
-        hex_box.pack(side="left", padx=(0, 10))
-        self._label(hex_box, "HEX").pack(anchor="w")
-        self.hex_entry = self._entry(hex_box, 96)
+        hex_box.pack(side="left", padx=(0, 8))
+        self.hex_label = self._label(hex_box, "HEX")
+        self.hex_label.pack(anchor="w")
+        self.hex_entry = self._entry(hex_box, 88)
         self.hex_entry.pack(pady=(4, 0))
         self.hex_entry.bind("<KeyRelease>", self._hex_typed)
 
@@ -143,7 +145,7 @@ class ColorPickerDialog(ctk.CTkToplevel):
             box = ctk.CTkFrame(fields, fg_color="transparent")
             box.pack(side="left", padx=(0, 6))
             self._label(box, name).pack(anchor="w")
-            entry = self._entry(box, 48)
+            entry = self._entry(box, 44)
             entry.pack(pady=(4, 0))
             entry.bind("<KeyRelease>", self._rgb_typed)
             self.rgb_entries.append(entry)

@@ -77,7 +77,7 @@ def _one(theme, outdir):
         fh.write(bulk_csv.SAMPLE_CSV)
     app.show_bulk_page()
     app.bulk_page.load_csv(sample)
-    app.bulk_page.folder_entry.insert(0, r"C:\Users\you\Documents\QR codes")
+    # the folder box shows the real default (Documents\QR codes), as a user sees it
     app.bulk_page._update_summary()
     shot("bulk")
     app.show_generate_page()

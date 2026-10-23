@@ -94,6 +94,14 @@ def main():
     check("wifi entry saved without password", top["type"] == "WiFi" and top.get("redacted")
           and PASSWORD not in top["text"] and "password" not in top["fields"], str(top))
     check("wifi entry has no picture", h.thumbnail_path(top) is None)
+    hp.refresh()
+    settle()
+    boxes = {(row.picture.winfo_width(), row.picture.winfo_height()) for row in hp._rows.values()}
+    check("a row without a picture has the same picture box as the others", len(boxes) == 1, str(boxes))
+    sizes = {tuple(row._thumb._size) for row in hp._rows.values()}
+    check("... and the same image size", len(sizes) == 1, str(sizes))
+    wifi_row = next(r for r in hp._rows.values() if r.entry["type"] == "WiFi")
+    check("the WiFi row is among them", wifi_row is not None)
     for path in h.stored_files():
         if path.endswith(".json"):
             check("password not in history.json", PASSWORD not in open(path, encoding="utf-8").read())

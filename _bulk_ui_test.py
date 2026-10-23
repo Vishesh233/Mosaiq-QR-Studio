@@ -61,6 +61,15 @@ def main():
     check("the sidebar opens the page", app._current_page == "bulk" and bp.winfo_manager())
     check("title", app.header._title_label.cget("text") == "Bulk Create")
     check("start disabled before a file", str(bp.start_btn.cget("state")) == "disabled")
+    from utils.paths import documents_folder
+    wanted = os.path.join(documents_folder(), "QR codes")
+    check("the folder starts as the user's own Documents\\QR codes", bp.folder_entry.get() == wanted,
+          f"{bp.folder_entry.get()!r} vs {wanted!r}")
+    check("... without saving it as a choice", settings_store.get("bulk_folder") is None)
+    check("no made-up user name in the default", "\\you\\" not in bp.folder_entry.get().lower())
+    check("progress bar is empty before a run", bp.progress.get() == 0
+          and bp.progress.cget("progress_color") == bp.progress.cget("fg_color"),
+          f"{bp.progress.get()} {bp.progress.cget('progress_color')} {bp.progress.cget('fg_color')}")
     check("table hidden before a file", not bp.table.winfo_manager())
 
     # ---- sample CSV download ----
@@ -86,6 +95,54 @@ def main():
     check("file name shown", bp.file_label.cget("text") == "sample.csv")
     check("start still needs a folder, but is enabled", str(bp.start_btn.cget("state")) == "normal"
           and "7 PNG files" in bp.start_btn.cget("text"), bp.start_btn.cget("text"))
+
+    # ---- long content: ellipsis, and no text runs into the next column, at every window size ----
+    long_url = "https://example.com/" + "very-long-path/" * 12
+    bp.load_csv(write("type,content,filename\nurl," + long_url + ",longone\nurl,https://short.example,short\n"))
+    settle()
+
+    def table_cells():
+        grid = {}
+        for widget in bp.table.winfo_children():
+            info = widget.grid_info()
+            grid[(int(info["row"]), int(info["column"]))] = widget
+        headers = {w.cget("text"): c for (r, c), w in grid.items() if r == 0}
+        return grid, headers
+
+    for width, height, columns in ((1280, 820, ["#", "FILE NAME", "CONTENT", "RESULT"]),
+                                   (WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, ["#", "FILE NAME", "RESULT"]),
+                                   (1920, 1080, ["#", "TYPE", "FILE NAME", "CONTENT", "RESULT"])):
+        root.geometry(f"{width}x{height}+-30000+-30000")
+        settle(0.8)
+        grid, headers = table_cells()
+        label = f"at {width}x{height}"
+        check(f"columns {label}", sorted(headers, key=headers.get) == columns, str(sorted(headers, key=headers.get)))
+        for row in (0, 1, 2):
+            cells = [grid[(row, c)] for c in range(len(columns))]
+            check(f"every cell is shown, row {row} {label}", all(w.winfo_ismapped() for w in cells),
+                  str([w.cget("text") for w in cells if not w.winfo_ismapped()]))
+            for left, right in zip(cells, cells[1:]):
+                check(f"cells do not overlap ('{left.cget('text')[:12]}' / '{right.cget('text')[:12]}') {label}",
+                      left.winfo_rootx() + left.winfo_width() <= right.winfo_rootx(),
+                      f"{left.winfo_rootx() + left.winfo_width()} vs {right.winfo_rootx()}")
+            for cell in cells:                       # the text itself fits its cell (is not clipped)
+                import tkinter.font as tkfont
+                family, points = cell.cget("font")[:2]
+                font = tkfont.Font(root=root, family=family, size=-round(abs(points) * 96 / 72))
+                need = font.measure(cell.cget("text")) * cell._get_widget_scaling()
+                check(f"text fits its cell: '{cell.cget('text')[:20]}' {label}",
+                      need <= cell.winfo_width() + 2 or cell.cget("wraplength"), f"{need:.0f} > {cell.winfo_width()}")
+        if "CONTENT" in headers:
+            content = grid[(1, headers["CONTENT"])].cget("text")
+            check(f"long content is cut with an ellipsis {label}", content.endswith("…") and len(content) < len(long_url),
+                  content)
+            check(f"short content is whole {label}", grid[(2, headers["CONTENT"])].cget("text") == "https://short.example")
+            result = grid[(1, headers["RESULT"])]
+            text_cell = grid[(1, headers["CONTENT"])]
+            gap = result.winfo_rootx() - (text_cell.winfo_rootx() + text_cell.winfo_width())
+            check(f"gap between Content and Result {label}", gap >= 16, f"{gap} px")
+    root.geometry("1280x820+-30000+-30000")
+    settle(0.6)
 
     # ---- a file with errors ----
     bad = write("type,content,filename,upi_id,amount\n"

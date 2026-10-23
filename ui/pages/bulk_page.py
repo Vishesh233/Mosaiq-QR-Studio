@@ -1,18 +1,66 @@
 """Bulk Create page: a CSV in, a folder of QR codes out (progress, cancel, no frozen window)."""
 import os
 
+import tkinter.font as tkfont
+
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
 from ui.layout import CARD_GAP, CARD_PAD, SectionCard, TwoColumnPage
 from ui.widgets import ModernSegmented
 from utils import bulk_csv, bulk_runner, qr_export, settings_store
+from utils.paths import documents_folder
 from utils.qr_generator import QRGenerator
 from utils.theme_manager import ThemeManager
 
 FOLDER_KEY = "bulk_folder"
-TABLE_PAGE = 100
-COLUMNS = (("#", 44), ("Type", 96), ("File name", 170), ("Content", 0), ("Result", 230))
+TABLE_PAGE = 40
+CHAR_PX = 7.2               # average width of a 12 pt character, in logical pixels
+CELL_PAD = 12               # space after each column
+WIDE, MEDIUM = 700, 480     # table widths (logical px) that show every column / drop Type
+
+
+def table_layout(width):
+    """(columns, room in logical pixels for Content) for a table ``width`` logical pixels wide.
+
+    Columns: key, header, width, wrap. Content takes what the others leave; narrow tables
+    drop Type first and then Content, so no text is ever squeezed into nothing."""
+    number, kind, stem, result = (("number", "#", 32), ("type", "Type", 88),
+                                  ("file", "File name", 150 if width >= WIDE else 120),
+                                  ("result", "Result", 150 if width >= WIDE else 140 if width >= MEDIUM else 130))
+    if width >= WIDE:
+        columns = [number, kind, stem, ("content", "Content", 0), result]
+    elif width >= MEDIUM:
+        columns = [number, stem, ("content", "Content", 0), result]
+    else:
+        columns = [number, stem, result]
+    fixed = sum(c[2] for c in columns) + CELL_PAD * len(columns)
+    room = max(80, int(width - fixed - 24)) if any(c[0] == "content" for c in columns) else 0
+    return columns, room
+
+
+def clip(text, limit):
+    """``text`` cut with an ellipsis so it is at most ``limit`` characters."""
+    return text if len(text) <= limit else text[:max(limit - 1, 1)].rstrip() + "…"
+
+
+def clip_to_width(text, pixels, font):
+    """``text`` cut with an ellipsis so that it is at most ``pixels`` wide in ``font``."""
+    if font.measure(text) <= pixels:
+        return text
+    low, high = 0, len(text)
+    while low < high:                        # longest prefix that still fits with the ellipsis
+        middle = (low + high + 1) // 2
+        if font.measure(text[:middle].rstrip() + "…") <= pixels:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low].rstrip() + "…"
+
+
+def default_folder():
+    """The user's own Documents folder (wherever Windows keeps it) plus "QR codes"."""
+    return os.path.join(documents_folder(), "QR codes")
 
 
 class BulkPage(TwoColumnPage):
@@ -28,7 +76,10 @@ class BulkPage(TwoColumnPage):
         self._poll_job = None
         self._table_limit = TABLE_PAGE
         self._errors_only = False
-        self.folder = settings_store.get(FOLDER_KEY, "") or ""
+        self._table_width = 560                 # logical px; follows the real width once shown
+        self._layout_key = None
+        self._relayout_job = None
+        self.folder = settings_store.get(FOLDER_KEY, "") or default_folder()
 
         # ======================= left: step 1 file, step 2 output =======================
         self.file_card = SectionCard(self.left, title="CSV file", step=1)
@@ -60,6 +111,7 @@ class BulkPage(TwoColumnPage):
         self.table = ctk.CTkFrame(body, fg_color=theme["segment_bg"], corner_radius=12,
                                   border_width=1, border_color=theme["border"])
         self.more_btn = self._button(body, "Show more rows", self._more_rows, width=160)
+        self.table.bind("<Configure>", self._on_table_resized)
 
         self.output_card = SectionCard(self.left, title="Output", step=2)
         self.output_card.pack(fill="x")
@@ -109,7 +161,7 @@ class BulkPage(TwoColumnPage):
         self.progress = ctk.CTkProgressBar(
             sbody, height=10, corner_radius=5, fg_color=theme["scrollbar"],
             progress_color=theme["primary"])
-        self.progress.set(0)
+        self._set_progress(0)
         self.progress.pack(fill="x", pady=(16, 6))
         self.status = ctk.CTkLabel(sbody, text="", anchor="w", justify="left", wraplength=300,
                                    font=("Segoe UI", 12), text_color=theme["text_secondary"])
@@ -121,6 +173,13 @@ class BulkPage(TwoColumnPage):
         self._update_summary()
 
     # ------------------------------------------------------------------ widgets
+
+    def _set_progress(self, value):
+        """CustomTkinter draws a small dot for 0%; at 0 the fill takes the track colour so the
+        bar is completely empty before a run."""
+        theme = ThemeManager.get_theme()
+        self.progress.configure(progress_color=theme["primary"] if value > 0 else theme["scrollbar"])
+        self.progress.set(value)
 
     def _button(self, parent, text, command, primary=False, danger=False, width=None):
         theme = ThemeManager.get_theme()
@@ -185,6 +244,29 @@ class BulkPage(TwoColumnPage):
         self._table_limit += TABLE_PAGE
         self._draw_table()
 
+    def _scaling(self):
+        top = self.winfo_toplevel()
+        return top._get_window_scaling() if hasattr(top, "_get_window_scaling") else 1.0
+
+    def _remember_table_width(self, pixels):
+        """Store the table's width in logical pixels (ignored until it has been laid out)."""
+        if pixels / self._scaling() >= 100:
+            self._table_width = pixels / self._scaling()
+
+    def _on_table_resized(self, event):
+        self._remember_table_width(event.width)
+        columns, room = table_layout(self._table_width)
+        drawn = self._layout_key
+        if drawn and drawn[0] == tuple(c[0] for c in columns) and abs(drawn[1] - room) <= 24:
+            return                               # same columns, same text length
+        if self._relayout_job is not None:
+            self.after_cancel(self._relayout_job)
+        self._relayout_job = self.after(150, self._relayout)
+
+    def _relayout(self):
+        self._relayout_job = None
+        self._draw_table()
+
     def _draw_table(self):
         theme = ThemeManager.get_theme()
         for child in self.table.winfo_children():
@@ -197,27 +279,46 @@ class BulkPage(TwoColumnPage):
         errors = sum(1 for r in self.rows if not r.ok)
         self.table_bar.pack(fill="x", pady=(14, 8))
         self.table.pack(fill="x")
+        self.update_idletasks()                  # lay out first: the real width decides the columns
+        self._remember_table_width(self.table.winfo_width())
         shown_rows = [r for r in self.rows if (not r.ok or not self._errors_only)]
         visible = shown_rows[:self._table_limit]
         self.table_info.configure(
             text=f"{len(self.rows)} rows · {errors} with errors" if errors else f"{len(self.rows)} rows · all fine")
 
-        self.table.grid_columnconfigure(3, weight=1)
-        for column, (name, width) in enumerate(COLUMNS):
+        columns, room = table_layout(self._table_width)
+        self._layout_key = (tuple(c[0] for c in columns), room)
+        scaling = self._scaling()
+        font = tkfont.Font(root=self, family="Segoe UI", size=-round(16 * scaling))   # 12 pt, as the cells
+        for column in range(6):
+            self.table.grid_columnconfigure(column, weight=0)
+        for column, (key, _name, _width) in enumerate(columns):
+            if key == "content":
+                self.table.grid_columnconfigure(column, weight=1)
+        stem_chars = int(columns[[c[0] for c in columns].index("file")][2] / CHAR_PX)
+
+        def pad(column):
+            return (12 if column == 0 else 4, CELL_PAD + (12 if columns[column][0] == "content" else 0))
+
+        for column, (key, name, width) in enumerate(columns):
             ctk.CTkLabel(self.table, text=name.upper(), anchor="w", font=("Segoe UI", 10),
-                         text_color=theme["text_secondary"], width=width).grid(
-                row=0, column=column, sticky="w", padx=(12 if column == 0 else 4, 4), pady=(8, 4))
+                         text_color=theme["text_secondary"], width=10 if key == "content" else width).grid(
+                row=0, column=column, sticky="ew" if key == "content" else "w", padx=pad(column), pady=(8, 4))
         for index, row in enumerate(visible, start=1):
             result = row.error or ("OK" + (f"  ·  {row.notes[0]}" if row.notes else ""))
             color = theme["danger"] if row.error else (theme["warning"] if row.notes else theme["success"])
-            cells = (str(row.number), row.type, row.stem, " ".join(row.payload.split())[:70] or "—", result)
-            for column, text in enumerate(cells):
+            texts = {"number": str(row.number), "type": row.type, "file": clip(row.stem, stem_chars),
+                     "content": clip_to_width(" ".join(row.payload.split()), (room - 6) * scaling, font) or "—",
+                     "result": result}
+            for column, (key, _name, width) in enumerate(columns):
+                # Content asks for little and stretches to the column, so a long text is clipped
+                # by the cell instead of pushing the neighbours out of the table.
                 label = ctk.CTkLabel(
-                    self.table, text=text, anchor="w", justify="left", font=("Segoe UI", 12),
-                    text_color=color if column == 4 else theme["text"],
-                    width=COLUMNS[column][1], wraplength=230 if column == 4 else 0)
-                label.grid(row=index, column=column, sticky="ew" if column == 3 else "w",
-                           padx=(12 if column == 0 else 4, 4), pady=2)
+                    self.table, text=texts[key], anchor="w", justify="left", font=("Segoe UI", 12),
+                    text_color=color if key == "result" else theme["text"],
+                    width=10 if key == "content" else width, wraplength=width - 4 if key == "result" else 0)
+                label.grid(row=index, column=column, sticky="ew" if key == "content" else "w",
+                           padx=pad(column), pady=2)
         if not visible:
             ctk.CTkLabel(self.table, text="No rows with errors.", font=("Segoe UI", 12),
                          text_color=theme["text_secondary"]).grid(row=1, column=0, columnspan=5, pady=14)
@@ -298,7 +399,7 @@ class BulkPage(TwoColumnPage):
             messagebox.showerror("Could not use this folder", e.strerror or str(e))
             return
         self.job = job
-        self.progress.set(0)
+        self._set_progress(0)
         self.problems.configure(text="")
         self.open_btn.pack_forget()
         self.cancel_btn.configure(state="normal")
@@ -315,7 +416,7 @@ class BulkPage(TwoColumnPage):
             return
         done, total, finished = job.progress()
         if done is not None:
-            self.progress.set(done / total if total else 1)
+            self._set_progress(done / total if total else 1)
             self.status.configure(text=f"Creating {done} of {total}…")
         if finished:
             self._finished(job)
@@ -332,7 +433,7 @@ class BulkPage(TwoColumnPage):
         theme = ThemeManager.get_theme()
         self.cancel_btn.pack_forget()
         cancelled = job.state == bulk_runner.CANCELLED
-        self.progress.set(job.saved / job.total if job.total else 1)
+        self._set_progress(job.saved / job.total if job.total else 1)
         verb = "Cancelled" if cancelled else "Done"
         self.status.configure(
             text=f"{verb}: {job.saved} of {job.total} codes saved in\n{job.folder}",
@@ -374,7 +475,8 @@ class BulkPage(TwoColumnPage):
         self.format_selector.apply_theme()
         self.folder_entry.configure(fg_color=theme["entry"], border_color=theme["entry_border"],
                                     text_color=theme["text"], placeholder_text_color=theme["text_muted"])
-        self.progress.configure(fg_color=theme["scrollbar"], progress_color=theme["primary"])
+        self.progress.configure(fg_color=theme["scrollbar"])
+        self._set_progress(self.progress.get())
         for label in (self.file_label, self.table_info, self.style_label, self.status):
             label.configure(text_color=theme["text_secondary"])
         self.counts.configure(text_color=theme["text"])
