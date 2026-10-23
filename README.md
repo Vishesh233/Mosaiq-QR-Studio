@@ -2,7 +2,7 @@
 
 ![Mosaiq QR Studio](assets/thumbnail/qr-studio-splash-1920x1080.png)
 
-A Windows desktop app for making and scanning QR codes, with a cinematic intro and eight themes.
+A Windows desktop app for making, styling, scanning and bulk-creating QR codes, with a cinematic intro and eight themes.
 Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 
 ## Features
@@ -11,9 +11,19 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 - QR codes from a URL or text, or from a small form for each smart type:
   **UPI payment** (UPI ID, payee, optional amount and note), **WiFi** (SSID, password, WPA/WEP/none, hidden),
   **Contact** (vCard 3.0), **Email** (`mailto:`) and **SMS** (`SMSTO:`)
-- Custom QR and background colours
+- **Design** in three tabs: colours (eight one-click presets, an in-app colour picker, contrast advice that warns but never blocks), style (square, rounded or dotted modules, square or rounded eyes, linear or radial gradient) and logo (size slider limited to what still scans)
 - Your logo in the centre (high error correction, so the code still scans)
-- Live preview, then save as PNG or copy it to the clipboard
+- A **test scan** under the preview reads the new code back and says *Scans correctly* or *May not scan*
+- Live preview that stays in view while you scroll the form; the file name is asked in the Save dialog (default such as `upi_qr.png`)
+- Save as **PNG, SVG or PDF** (SVG is drawn from the same modules as the PNG; PDF holds a picture of at least 2000 px), or copy it to the clipboard
+
+### History
+- The codes you generated and scanned, newest first, with filters and **Open**, **Copy**, **Re-generate** and **Delete**
+- Local only (`history.json` and small previews next to the settings file). It can be switched off and cleared in Settings. **WiFi passwords are not saved by default**, and then no WiFi preview picture is stored either. Scans keep the decoded text only, never the picture
+
+### Bulk Create
+- Load a CSV (a sample can be downloaded in the app), see every row with its own error message, and create up to 1000 codes at once into a folder as PNG, SVG or PDF, with the look chosen on the Generate page
+- Progress and Cancel while the window keeps answering; files are never overwritten
 
 ### Scan
 - **Webcam**: *Use Camera* shows a live preview and decodes the first QR code it sees; it stops itself, and releases the camera on Stop, tab change or exit
@@ -54,13 +64,20 @@ To skip the intro, run `main.py --no-splash` or set `QRSTUDIO_NO_SPLASH=1`.
 
 ## Tests
 
-Run from the repository root with the venv's Python (they open real windows; the drag-and-drop test moves the mouse by itself for a few seconds):
+Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe _run_all_tests.py` runs everything (`--skip-desktop` leaves out the webcam, screen-region and drag-and-drop tests, which use the real desktop; the drag-and-drop test moves the mouse by itself for a few seconds). Tests open their windows off-screen and never show a real message box or file dialog: dialogs are replaced by recorders, and an unexpected error box fails the test. A test that leaves a process running fails too.
 
 | Script | Covers |
 |---|---|
 | `_roundtrip_test.py` | every QR type: build, generate, scan, parse; scanner edge cases |
 | `_smoke_test.py` | the UI: navigation, all six generate forms, scan results, clipboard, settings, themes |
 | `_func_test.py` | generate, scan and clipboard without the UI |
+| `_generate_ui_test.py`, `_scan_ui_test.py` | the redesigned Generate and Scan pages: alignment, sticky preview and result card, minimum window size, Save dialog, file names |
+| `_design_features_test.py`, `_style_render_test.py`, `_color_picker_test.py` | presets and contrast advice, the test-scan badge, logo limits, every style scans, the colour picker |
+| `_export_test.py` | PNG, SVG (valid XML, drawn by Edge, equal to the PNG) and PDF (at least 2000 px, scans back) |
+| `_history_test.py`, `_history_ui_test.py` | the history store and the History page, WiFi privacy (every saved preview is decoded to prove no password), Settings switches |
+| `_bulk_test.py`, `_bulk_ui_test.py` | CSV reading and per-row errors, the 1000-row limit, file names, the worker, Cancel, formats, progress without a frozen window |
+| `_theme_contrast_test.py` | contrast of every theme and every widget, live theme switching |
+| `_window_visible_test.py` | the window is on a monitor after start-up, even from an off-screen position |
 | `_region_test.py` | screen-region overlay, crop mapping, window restore |
 | `_camera_test.py` | webcam thread, fake and real camera, release on stop, tab change and exit |
 | `_dnd_test.py` | drag and drop fallback, and real OLE drops (needs `tkinterdnd2`) |
@@ -86,9 +103,11 @@ Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCo
 Mosaiq-QR-Studio/
 ├── main.py, config.py
 ├── ui/                  # app shell, pages, components, settings dialog
+│   ├── pages/           # Generate, Scan, History, Bulk Create
 │   ├── splash.py        # animated intro (NumPy renderer)
 │   └── brand_logo.py    # logo and app icon, drawn in code
-├── utils/               # QR generator, payload types, scanner, camera, screen capture, clipboard, themes, settings
+├── utils/               # QR generator and renderer, export, history, bulk, payload types, scanner, camera, screen capture, clipboard, themes, settings
+├── docs/design/         # UI mockups the redesign follows
 ├── reference/           # intro data: QR matrix and wordmark font
 ├── assets/              # app icon, screenshots, thumbnails
 ├── packaging/msix/      # Store manifest, identity, logo assets, listing text
@@ -99,8 +118,7 @@ Mosaiq-QR-Studio/
 
 ## Roadmap
 
-- History of generated and scanned codes
-- Batch generation
+- More QR types and templates
 
 ## Author
 

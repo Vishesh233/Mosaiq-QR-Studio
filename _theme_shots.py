@@ -1,4 +1,4 @@
-"""App-window screenshots of every theme (Generate and Scan pages).
+"""App-window screenshots of every theme (Generate, Scan, History, Bulk Create, Settings, colour picker).
 
 Only the app's own window is captured (PrintWindow, see _window_capture.py), never the
 screen. Each theme runs in its own process with a throw-away APPDATA, so the saved
@@ -46,6 +46,36 @@ def _one(theme, outdir):
 
     app.show_scan_page()
     shot("scan")
+
+    # History and Bulk Create with sample data only (throw-away APPDATA).
+    from utils import bulk_csv, history_store
+    from utils.qr_generator import QRGenerator
+    from utils.qr_render import QRStyle
+
+    gen = QRGenerator()
+    for text, kind in (("https://example.com/menu", "URL / Text"),
+                       ("upi://pay?pa=sample@examplebank&pn=Mosaiq%20Cafe&am=249.00", "UPI Payment"),
+                       ("mailto:hello@example.com", "Email")):
+        history_store.add_scanned(text, kind, gen.generate(text))
+    look = QRStyle(module_shape="rounded", eye_shape="rounded", gradient="linear",
+                   fg="#0E7490", fg2="#1E3A8A")
+    history_store.add_generated("URL / Text", "https://example.com/launch",
+                                {"url": "https://example.com/launch"}, look, None,
+                                gen.generate("https://example.com/launch", style=look))
+    history_store.add_generated("WiFi", "WIFI:T:WPA;S:Mosaiq Guest;P:sample-pass-123;;",
+                                {"ssid": "Mosaiq Guest", "password": "sample-pass-123"}, QRStyle())
+    app.show_history_page()
+    app.history_page.select(history_store.entries()[1]["id"])
+    shot("history")
+
+    sample = os.path.join(tempfile.mkdtemp(), "mosaiq-bulk-sample.csv")
+    with open(sample, "w", encoding="utf-8", newline="") as fh:
+        fh.write(bulk_csv.SAMPLE_CSV)
+    app.show_bulk_page()
+    app.bulk_page.load_csv(sample)
+    app.bulk_page.folder_entry.insert(0, r"C:\Users\you\Documents\QR codes")
+    app.bulk_page._update_summary()
+    shot("bulk")
     app.show_generate_page()
 
     # Settings dialog (its own window handle, so still window-only).

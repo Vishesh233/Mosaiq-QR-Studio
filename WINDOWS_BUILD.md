@@ -132,6 +132,15 @@ Manual test checklist:
 - [ ] **Paste:** copy a QR with Snipping Tool (Win + Shift + S) → Scan → Paste (or Ctrl+V).
 - [ ] **Screen Region:** Scan → Screen Region → drag around a QR code on screen; try at
       100%, 125% and 150% display scaling (Settings → System → Display).
+- [ ] **Styles:** Generate → Design → Style / Colours: pick a preset, dotted modules, a gradient and
+      a logo; the badge under the preview says *Scans correctly*; scan the saved PNG back.
+- [ ] **Export:** save one code as PNG, SVG and PDF; open each (SVG in a browser, PDF in a reader).
+- [ ] **History:** generated and scanned codes appear on the History page; Open and Re-generate work;
+      a WiFi code has no password and no picture unless *Save WiFi passwords* is switched on in
+      Settings; *Clear history* empties the list.
+- [ ] **Bulk Create:** download the sample CSV, load it, choose a folder, create; try Cancel on a
+      large file; a row with an error is shown and skipped.
+- [ ] **Window:** the window opens on screen (also after moving it to a second monitor and unplugging it).
 - [ ] **Intro:** the full-screen splash plays, then the maximized main window appears.
 - [ ] **Themes:** Settings ⚙ → pick a theme from the gallery (Midnight … Daylight) → Apply.
 
