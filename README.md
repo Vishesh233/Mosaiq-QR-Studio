@@ -37,6 +37,7 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
 - Eight themes with live preview: Midnight, Graphite, AMOLED, Aqua Mint, Ultraviolet, Ember, Emerald and the light Daylight
+- A **liquid ink transition** (three blobs, droplets, a glowing edge; 3 s, click or key skips it) plays when the theme changes in Settings. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
 - Settings has an Apply / Cancel footer: themes preview live, **Apply** saves everything, **Cancel** goes back, and closing with X asks whether to save; the saved theme is used on the next start
 - Works fully offline; nothing is collected or sent ([privacy policy](PRIVACY.md))
 
@@ -81,6 +82,7 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_history_test.py`, `_history_ui_test.py` | the history store and the History page, WiFi privacy (every saved preview is decoded to prove no password), Settings switches |
 | `_bulk_test.py`, `_bulk_ui_test.py` | CSV reading and per-row errors, the 1000-row limit, file names, the worker, Cancel, formats, progress without a frozen window |
 | `_theme_contrast_test.py` | contrast of every theme and every widget, live theme switching |
+| `_theme_transition_test.py` | the liquid blob theme transition: mask maths and patch order, snapshot of the app window only, skip on click / key / resize, restart, off switches, frame-time benchmark |
 | `_settings_persist_test.py` | Settings: Apply writes every setting atomically, Cancel and "Don't save" write nothing, X asks "Save changes?", a failed write is reported, the next launch uses the saved theme, the footer is always visible |
 | `_status_dot_test.py` | the card status dot (dim, then bright with a glow once there is a result) on every page, the fade, and the sidebar's theme dot in every theme |
 | `_defaults_test.py` | a fresh install: intro animation on, history on, WiFi passwords off |

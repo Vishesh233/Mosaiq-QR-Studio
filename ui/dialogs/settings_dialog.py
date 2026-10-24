@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import messagebox
 
-from utils import history_store, settings_store
+from utils import history_store, settings_store, theme_transition
 from utils.theme_manager import ThemeManager
 from ui import icons
 from ui.layout import autohide_scrollbar, restyle_scrollable
@@ -98,6 +98,11 @@ class SettingsDialog(ctk.CTkToplevel):
             value=bool(settings_store.get("splash_enabled", True))
         )
 
+        self.animate_var = ctk.BooleanVar(value=bool(settings_store.get(theme_transition.SETTING_KEY, True)))
+        # While this dialog is open the switch decides at once (before it is applied).
+        theme_transition.ENABLED_OVERRIDE = bool(self.animate_var.get())
+        self.animate_var.trace_add(
+            "write", lambda *_: setattr(theme_transition, "ENABLED_OVERRIDE", bool(self.animate_var.get())))
         self.history_var = ctk.BooleanVar(value=history_store.enabled())
         self.wifi_var = ctk.BooleanVar(value=history_store.save_wifi_passwords())
         self._saved = self.values()          # what the dialog showed when it opened
@@ -212,6 +217,19 @@ class SettingsDialog(ctk.CTkToplevel):
             fg_color=theme["scrollbar"],
             text_color=theme["text"],
         ).pack(side="right", padx=18)
+
+        # ---------------- Appearance ---------------- #
+
+        self._section("APPEARANCE", pady=(22, 8))
+        appearance = ctk.CTkFrame(
+            self.body, fg_color=theme["card"], corner_radius=12,
+            border_width=1, border_color=theme["border"],
+        )
+        appearance.pack(fill="x", padx=30)
+        self._switch_row(appearance, "Animate theme changes",
+                         "A liquid ink transition when the theme changes. Off, or with Windows "
+                         "animations off, the theme changes at once.", self.animate_var)
+        ctk.CTkFrame(appearance, height=14, fg_color="transparent").pack()
 
         # ---------------- History ---------------- #
 
@@ -376,13 +394,17 @@ class SettingsDialog(ctk.CTkToplevel):
     # ======================================================
 
     def _apply_live(self, name):
-        ThemeManager.set_theme(name, persist=False)
         app = self._find_app()
-        if app:
+        restyle = lambda: restyle_scrollable(self.body, "background")
+        if app is not None and hasattr(app, "change_theme"):
+            app.change_theme(name, also=restyle)       # with the blob transition on the windows
+            return
+        ThemeManager.set_theme(name, persist=False)
+        if app is not None:
             app.refresh_theme()
         else:
             ThemeManager.retheme_tree(self)
-        restyle_scrollable(self.body, "background")
+        restyle()
 
     def preview_theme(self, theme_name):
         """Show ``theme_name`` on the whole app right away (not saved yet)."""
@@ -407,11 +429,16 @@ class SettingsDialog(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def destroy(self):
+        theme_transition.ENABLED_OVERRIDE = None
+        super().destroy()
+
     def values(self):
         """Every setting this dialog edits, as it stands now (the keys of settings.json)."""
         return {
             "theme": self._selected,
             "splash_enabled": bool(self.splash_var.get()),
+            theme_transition.SETTING_KEY: bool(self.animate_var.get()),
             history_store.KEY_ENABLED: bool(self.history_var.get()),
             history_store.KEY_WIFI_PASSWORDS: bool(self.wifi_var.get()),
         }

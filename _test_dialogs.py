@@ -1,6 +1,6 @@
 """Keeps real dialogs off the screen while the tests run (not part of the app).
 
-It also keeps the test windows out of the taskbar: a test parks its window far off-screen, and
+It switches the theme-change animation off (QRSTUDIO_NO_THEME_ANIMATION=1), and it keeps the test windows out of the taskbar: a test parks its window far off-screen, and
 a taskbar button for a window nobody can see invites a click that minimizes it in the middle
 of a layout check.
 
@@ -117,6 +117,8 @@ def _save_changes_question():
 def install():
     """Replace the dialogs (once per process); returns this module for ``calls`` / ``answers``."""
     global _installed
+    # Theme changes in tests are instant: the 3 s blob transition has its own test.
+    os.environ.setdefault("QRSTUDIO_NO_THEME_ANIMATION", "1")
     if not _installed:
         _without_taskbar_button()
         _save_changes_question()

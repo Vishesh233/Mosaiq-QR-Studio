@@ -20,6 +20,7 @@ from config import (
 )
 
 from utils import app_log, settings_store, window_guard
+from utils.theme_transition import ThemeTransition
 from utils.theme_manager import ThemeManager
 
 
@@ -77,6 +78,11 @@ class QRCodeStudioApp:
 
         # App reference for dialogs (unchanged contract).
         self.root.app = self
+
+        # The liquid blob transition for live theme changes (never at start-up).
+        self.theme_transition = ThemeTransition(
+            self.root, windows=self._transition_windows,
+            accent=lambda: ThemeManager.get_theme()["primary"])
 
         # Root grid: sidebar | main
         self.root.grid_columnconfigure(0, weight=0)
@@ -194,6 +200,21 @@ class QRCodeStudioApp:
         self.generate_page.regenerate_entry(entry)
 
     # ==================================================
+
+    def _transition_windows(self):
+        """The windows the transition covers: the main window. A Settings dialog changes theme at
+        once (a second full-size animation would slow both down); it stays on top of the effect."""
+        return [self.root]
+
+    def change_theme(self, name, also=None):
+        """Switch to theme ``name`` live (nothing is saved) with the blob transition. ``also`` is
+        called as part of the change (a dialog restyles itself there)."""
+        def change():
+            ThemeManager.set_theme(name, persist=False)
+            self.refresh_theme()
+            if also is not None:
+                also()
+        self.theme_transition.run(change)
 
     def refresh_theme(self):
         """Re-apply the active theme across the shell, pages and components."""

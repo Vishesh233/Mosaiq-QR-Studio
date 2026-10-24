@@ -97,8 +97,9 @@ anywhere on your screen. Mosaiq recognises what it reads and shows it clearly, s
 click and anything decoded can be copied. Scanning a payment, WiFi or contact code never
 starts a payment or changes your settings.
 
-Eight themes, including AMOLED black and the light Daylight theme, and a cinematic intro you
-can switch off at any time.
+Eight themes, including AMOLED black and the light Daylight theme, with a liquid ink
+transition when you change theme (it can be switched off), and a cinematic intro you can switch
+off at any time.
 
 Everything runs on your PC: no account, no ads, no tracking and no internet connection
 needed.
@@ -115,7 +116,7 @@ needed.
 - History of generated and scanned codes, local only, easy to switch off or clear
 - WiFi passwords are not kept in history unless you choose to
 - Scan with your webcam, image files, the clipboard or a region of your screen
-- Eight themes with live preview, including AMOLED and a light theme
+- Eight themes with live preview and a liquid ink transition (can be switched off)
 - Works offline, with no account, ads or tracking
 
 ### What's new in this version
