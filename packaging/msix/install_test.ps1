@@ -116,7 +116,13 @@ catch {
 }
 finally {
     # ---- 5. clean up, whatever happened ----
-    Get-Process -Name MosaiqQRStudio -ErrorAction SilentlyContinue | Stop-Process -Force
+    # Only the installed test package's own process is stopped, never another copy of the app.
+    $pkgNow = Get-AppxPackage ($id.IdentityName)
+    if ($pkgNow) {
+        Get-Process -Name MosaiqQRStudio -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -and $_.Path.StartsWith($pkgNow.InstallLocation, [StringComparison]::OrdinalIgnoreCase) } |
+            Stop-Process -Force
+    }
     if ($installed) {
         Get-AppxPackage ($id.IdentityName) | Remove-AppxPackage
     }
