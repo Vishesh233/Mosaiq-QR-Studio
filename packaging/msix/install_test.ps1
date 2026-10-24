@@ -82,9 +82,14 @@ try {
             [xml]$xml = Get-Content -LiteralPath $wackXml
             $overall = $xml.DocumentElement.GetAttribute("OVERALL_RESULT")
             Say ("WACK overall result: {0}" -f $overall)
+            # Optional tests are advice (the Python/Tcl/OpenCV runtime DLLs always trip "Blocked executables").
             $failed = @($xml.SelectNodes("//TEST[RESULT='FAIL']"))
-            foreach ($t in $failed) { Say ("  FAIL: {0}" -f $t.GetAttribute("NAME")) }
-            if ($failed.Count -gt 0 -or $overall -ne "PASS") { $ok = $false }
+            foreach ($t in $failed) {
+                $optional = $t.GetAttribute("OPTIONAL") -eq "TRUE"
+                Say ("  {0}: {1}" -f $(if ($optional) { "advice (optional test failed)" } else { "FAIL" }), $t.GetAttribute("NAME"))
+                if (-not $optional) { $ok = $false }
+            }
+            if ($overall -ne "PASS") { $ok = $false }
             Say "WACK report: $wackXml"
         } else {
             Say "WACK produced no report."
@@ -104,8 +109,9 @@ try {
         Push-Location $root
         try {
             $env:PYTHONUTF8 = "1"
-            $out = & $venvPy (Join-Path $root "_installed_app_test.py") $aumid 2>&1 | Out-String
-        } finally { Pop-Location }
+            $ErrorActionPreference = "Continue"      # Python's stderr (a traceback) must reach the report
+            $out = & $venvPy (Join-Path $root "_installed_app_test.py") $aumid 2>&1 | ForEach-Object { "$_" } | Out-String
+        } finally { $ErrorActionPreference = "Stop"; Pop-Location }
         Say $out.Trim()
         if ($out -notmatch "INSTALLED_APP_OK") { $ok = $false }
     }

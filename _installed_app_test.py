@@ -4,7 +4,7 @@ Works on the built exe or on the installed Store package (launched through its a
 same check runs before and after packaging. It moves the mouse and types: keep your hands off
 the keyboard and mouse while it runs (about a minute; the intro plays first in the package).
 
-Run:  .venv\\Scripts\\python.exe _installed_app_test.py exe
+Run (exe-intro plays the intro first, like a fresh install):  .venv\\Scripts\\python.exe _installed_app_test.py exe
       .venv\\Scripts\\python.exe _installed_app_test.py shell:AppsFolder\\<PackageFamilyName>!MosaiqQRStudio
 
 Only the app's own window is captured (PrintWindow), never the screen.
@@ -63,11 +63,27 @@ def all_windows():
 
 
 def find_window():
-    """The window this test started (not one that was already open), once it is really shown."""
+    """The main window this test started (not one already open), once the intro is over and it is
+    shown maximized. Anything earlier (the intro's own windows) does not count."""
     for handle, pid in all_windows():
-        if handle not in before_launch and win32gui.GetWindowPlacement(handle)[1] != win32con.SW_SHOWMINIMIZED:
+        if handle not in before_launch and win32gui.GetWindowPlacement(handle)[1] == win32con.SW_SHOWMAXIMIZED:
             return handle, pid
     return None, None
+
+
+def intro_windows(main, pid):
+    """Visible full-screen windows of the app other than the main one (the intro's last frame
+    stays on top of the main window for a moment while it hands over)."""
+    found = []
+
+    def collect(handle, _):
+        if handle != main and win32gui.IsWindowVisible(handle)                 and win32process.GetWindowThreadProcessId(handle)[1] == pid:
+            left, top, right, bottom = win32gui.GetWindowRect(handle)
+            if right - left >= win32api.GetSystemMetrics(0) - 8:
+                found.append(handle)
+
+    win32gui.EnumWindows(collect, None)
+    return found
 
 
 def click(x, y):
@@ -125,8 +141,12 @@ def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "exe"
     proc = None
     before_launch.update(handle for handle, _pid in all_windows())
-    if target == "exe":
-        env = dict(os.environ, QRSTUDIO_NO_SPLASH="1", APPDATA=tempfile.mkdtemp())
+    if target in ("exe", "exe-intro"):
+        env = dict(os.environ, APPDATA=tempfile.mkdtemp())
+        if target == "exe":
+            env["QRSTUDIO_NO_SPLASH"] = "1"          # "exe-intro" plays the intro, like a fresh install
+        else:
+            env.pop("QRSTUDIO_NO_SPLASH", None)
         proc = subprocess.Popen([EXE], env=env)
     else:
         subprocess.Popen(["explorer.exe", target])
@@ -136,9 +156,13 @@ def main():
     while time.time() < end and not hwnd:
         hwnd, pid = find_window()
         pump(0.3)
-    check("the app window appears", bool(hwnd))
+    check("the main window appears (after the intro)", bool(hwnd))
     if not hwnd:
         return
+    end = time.time() + 30
+    while time.time() < end and intro_windows(hwnd, pid):
+        pump(0.3)
+    check("the intro has closed", not intro_windows(hwnd, pid))
     pump(3)
     win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
