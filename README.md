@@ -128,6 +128,10 @@ Mosaiq-QR-Studio/
 └── requirements.txt
 ```
 
+## Working on this repo with an AI agent
+
+Standing rules (never stop processes by name or in bulk, only your own PIDs; window-only screenshots; no AI attribution in commits) are in [AGENTS.md](AGENTS.md).
+
 ## Roadmap
 
 - More QR types and templates

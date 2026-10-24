@@ -1,3 +1,4 @@
+import math
 import tkinter
 
 import customtkinter as ctk
@@ -119,6 +120,9 @@ class ModernSegmented(ctk.CTkSegmentedButton):
         selected = self.get()
         for value, button in self._buttons_dict.items():
             button.configure(
+                # the segments' own background is what shows at their rounded corners: it must be the strip's colour
+                # (CustomTkinter leaves its grey default there until something re-themes the control)
+                bg_color=theme["segment_bg"],
                 text_color=theme["on_primary"] if value == selected else theme["text"]
             )
 
@@ -323,17 +327,19 @@ class DashedZone(ctk.CTkFrame):
 
 
 class StatusDot(tkinter.Canvas):
-    """The small dot in front of a card title: dim while the card is empty, bright with a soft
-    glow ring once it holds a result. The change fades in over about 180 ms.
+    """The dot in front of a card title: a small lit lamp. Idle (the card is empty) it is a dull core with
+    a faint halo; once the card holds a result it is bright, with a strong soft glow around it. The change
+    fades over about 180 ms. There is no outline or ring anywhere: the glow is a smooth radial falloff
+    (see ui.glow).
 
-    ``set_active(True/False)``; ``active`` tells the current state. A plain Canvas, so a state
-    change redraws two circles and costs nothing noticeable.
+    ``set_active(True/False)``; ``active`` tells the current state. A change redraws one small cached image.
     """
 
-    SIZE = 20            # logical px
-    CORE = 4.5           # radius of the dot
-    RING = 9.0           # radius of the glow
-    RING_STRENGTH = 0.30  # how much of the bright colour the ring shows at full glow
+    SIZE = 28                       # logical px
+    CORE = 4.2                      # radius of the dot
+    GLOW_IDLE = (4.6, 0.14)         # (spread in px, strength) while dim
+    GLOW_LIT = (7.4, 0.95)          # ... and when bright
+    HOT = 0.40                      # how far the middle of the lit core goes towards white
     STEPS = 6
     STEP_MS = 30
 
@@ -346,6 +352,7 @@ class StatusDot(tkinter.Canvas):
         self.active = False
         self._level = 0.0            # 0 = dim, 1 = bright (moves during the fade)
         self._job = None
+        self._photo = None
         self._draw()
 
     @staticmethod
@@ -360,25 +367,27 @@ class StatusDot(tkinter.Canvas):
         """(dim, bright, surface) for a theme dictionary."""
         return theme["text_muted"], theme["success"], theme["card"]
 
-    def current_colours(self):
-        """(dot colour, ring colour or None) for the level being shown."""
+    def current_look(self):
+        """(core colour, glow spread px, glow strength, hot) for the level being shown."""
         from utils import colors
-        dim, bright, surface = self.colours(ThemeManager.get_theme())
-        dot = colors.blend(dim, bright, self._level)
-        ring = colors.blend(surface, bright, self.RING_STRENGTH * self._level) if self._level > 0.02 else None
-        return dot, ring
+        dim, bright, _surface = self.colours(ThemeManager.get_theme())
+        level = self._level
+        spread = self.GLOW_IDLE[0] + (self.GLOW_LIT[0] - self.GLOW_IDLE[0]) * level
+        strength = self.GLOW_IDLE[1] + (self.GLOW_LIT[1] - self.GLOW_IDLE[1]) * level
+        hot = self.HOT * level if ThemeManager.get_mode() == "Dark" else 0.0     # a white-hot middle only shows on a dark card
+        return colors.blend(dim, bright, level), spread, strength, hot
 
     # ------------------------------------------------------------------ drawing
 
     def _draw(self):
+        from ui import glow
+        colour, spread, strength, hot = self.current_look()
+        surface = self.colours(ThemeManager.get_theme())[2]
+        scale = self._scale
+        side = round(self.SIZE * scale)
+        self._photo = glow.photo(side, surface, colour, self.CORE * scale, spread * scale, strength, hot)
         self.delete("all")
-        dot, ring = self.current_colours()
-        centre = self.SIZE * self._scale / 2
-        if ring:
-            r = self.RING * self._scale
-            self.create_oval(centre - r, centre - r, centre + r, centre + r, fill=ring, outline="")
-        r = self.CORE * self._scale
-        self.create_oval(centre - r, centre - r, centre + r, centre + r, fill=dot, outline="")
+        self.create_image(side / 2, side / 2, image=self._photo)
 
     def set_active(self, active):
         """Bright with glow (a result is showing) or dim (empty, cleared, invalid)."""
@@ -415,15 +424,15 @@ class StatusDot(tkinter.Canvas):
 
 
 class ThemeDot(tkinter.Canvas):
-    """The dot in front of the theme name in the sidebar footer: the theme's accent colour with
-    a soft glow. When the theme changes it blends from the old colour to the new one while a
-    ring spreads out and fades (about 350 ms)."""
+    """The dot in front of the theme name in the sidebar footer: a lit lamp in the theme's accent colour
+    with a strong soft glow and no outline. When the theme changes it blends from the old colour to the new
+    one while the glow swells and settles again (about 350 ms)."""
 
-    SIZE = 24            # logical px
-    CORE = 4.5
-    RING = 8.5
-    RING_STRENGTH = 0.30
-    PULSE_STRENGTH = 0.50
+    SIZE = 32                # logical px
+    CORE = 4.6
+    GLOW = (7.0, 0.9)        # (spread in px, strength) at rest
+    SWELL = (4.0, 0.1)       # how much more the glow spreads / strengthens at the height of a change
+    HOT = 0.40
     STEPS = 10
     STEP_MS = 35
 
@@ -437,28 +446,25 @@ class ThemeDot(tkinter.Canvas):
         self._to = theme["primary"]
         self._t = 1.0
         self._job = None
+        self._photo = None
         self._draw()
 
-    def _draw(self):
+    def current_look(self):
+        """(core colour, glow spread px, glow strength, hot) as drawn now."""
         from utils import colors
-        theme = ThemeManager.get_theme()
-        surface = theme["navbar"]
-        colour = colors.blend(self._from, self._to, self._t)
-        centre = self.SIZE * self._scale / 2
-        s = self._scale
-        if self._t < 1.0:                                   # the spreading, fading ring
-            radius = (self.CORE + (self.SIZE / 2 - self.CORE) * self._t) * s
-            tint = colors.blend(surface, self._to, self.PULSE_STRENGTH * (1 - self._t))
-            self.delete("all")
-            self.create_oval(centre - radius, centre - radius, centre + radius, centre + radius,
-                             fill=tint, outline="")
-        else:
-            self.delete("all")
-        ring = colors.blend(surface, colour, self.RING_STRENGTH)
-        self.create_oval(centre - self.RING * s, centre - self.RING * s,
-                         centre + self.RING * s, centre + self.RING * s, fill=ring, outline="")
-        self.create_oval(centre - self.CORE * s, centre - self.CORE * s,
-                         centre + self.CORE * s, centre + self.CORE * s, fill=colour, outline="")
+        swell = math.sin(math.pi * self._t) if self._t < 1.0 else 0.0
+        return (colors.blend(self._from, self._to, self._t), self.GLOW[0] + self.SWELL[0] * swell,
+                min(1.0, self.GLOW[1] + self.SWELL[1] * swell), self.HOT if ThemeManager.get_mode() == "Dark" else 0.0)
+
+    def _draw(self):
+        from ui import glow
+        colour, spread, strength, hot = self.current_look()
+        scale = self._scale
+        side = round(self.SIZE * scale)
+        self._photo = glow.photo(side, ThemeManager.get_theme()["navbar"], colour, self.CORE * scale,
+                                 spread * scale, strength, hot)
+        self.delete("all")
+        self.create_image(side / 2, side / 2, image=self._photo)
 
     def refresh_theme(self):
         """Show the active theme's colours, animated when the dot is on screen."""

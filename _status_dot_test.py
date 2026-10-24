@@ -1,8 +1,9 @@
 """The status dot in front of the card titles (Live Preview, Result, Summary, Details).
 
-Dim while the card is empty; bright with a glow ring once it holds a result; back to dim on
-Clear, on invalid input and when the result is gone. The change fades in (about 180 ms) without
-slowing the window, and the dot follows every theme.
+Dim while the card is empty (a dull core, a faint halo); bright with a strong soft glow once it
+holds a result; back to dim on Clear, on invalid input and when the result is gone. The change fades in
+(about 180 ms) without slowing the window, and the dot follows every theme. The dots are lit lamps:
+the glow is a smooth falloff with no outline or ring anywhere (checked on the drawn pixels).
 
 Run:  .venv\\Scripts\\python.exe _status_dot_test.py
 """
@@ -28,7 +29,7 @@ def main():
     dialogs = _test_dialogs.install()
 
     from ui.app import QRCodeStudioApp
-    from ui.widgets import StatusDot
+    from ui.widgets import StatusDot, ThemeDot
     from utils import bulk_csv, colors, history_store
     from utils.qr_generator import QRGenerator
     from utils.theme_manager import ThemeManager
@@ -45,9 +46,9 @@ def main():
             time.sleep(0.01)
 
     def shown(dot):
-        """(dot colour, ring colour or None) as drawn right now (read from the canvas)."""
-        fills = [dot.itemcget(item, "fill") for item in dot.find_all()]
-        return (fills[-1].upper(), fills[0].upper() if len(fills) > 1 else None)
+        """(core colour, glow strength) as drawn right now."""
+        colour, _spread, strength, _hot = dot.current_look()
+        return colour.upper(), strength
 
     def state(name, dot, want):
         settle(0.35)
@@ -56,13 +57,13 @@ def main():
             settle(0.05)
         theme = ThemeManager.get_theme()
         dim, bright = theme["text_muted"].upper(), theme["success"].upper()
-        core, ring = shown(dot)
+        core, strength = shown(dot)
         if want:
             check(f"{name}: bright after the fade", dot.active and core == bright, f"{core} vs {bright}")
-            check(f"{name}: glow ring shown", ring is not None and ring != core, str(ring))
+            check(f"{name}: strong glow", strength >= 0.9, str(strength))
         else:
             check(f"{name}: dim", not dot.active and core == dim, f"{core} vs {dim}")
-            check(f"{name}: no glow ring", ring is None, str(ring))
+            check(f"{name}: only a faint halo", strength <= 0.2, str(strength))
 
     # ---- the dots exist on the four cards ----
     gp, sp, hp, bp = app.generate_page, app.scan_page, app.history_page, app.bulk_page
@@ -158,18 +159,18 @@ def main():
     ThemeManager.set_theme("Aqua Mint", persist=False)
     app.refresh_theme()
     settle(0.5)
-    fills = [sidebar_dot.itemcget(i, "fill").upper() for i in sidebar_dot.find_all()]
-    check("sidebar dot: accent colour with a glow ring", fills[-1] == ThemeManager.get_theme()["primary"].upper()
-          and len(fills) == 2 and fills[0] != fills[-1], str(fills))
+    look = sidebar_dot.current_look()
+    check("sidebar dot: accent colour with a strong glow", look[0].upper() == ThemeManager.get_theme()["primary"].upper()
+          and look[2] >= 0.8, str(look))
     ThemeManager.set_theme("Ember", persist=False)
     app.refresh_theme()
     settle(0.07)
     check("sidebar dot: animating right after a theme change", 0 < sidebar_dot._t < 1, f"t={sidebar_dot._t}")
-    mid = [sidebar_dot.itemcget(i, "fill").upper() for i in sidebar_dot.find_all()]
-    check("sidebar dot: mid-animation shows an extra spreading ring", len(mid) == 3, str(mid))
+    mid = sidebar_dot.current_look()
+    check("sidebar dot: mid-animation the glow swells", mid[1] > ThemeDot.GLOW[0], str(mid))
     settle(0.6)
     check("sidebar dot: finished on the new accent colour",
-          sidebar_dot.itemcget(sidebar_dot.find_all()[-1], "fill").upper() == ThemeManager.get_theme()["primary"].upper()
+          sidebar_dot.current_look()[0].upper() == ThemeManager.get_theme()["primary"].upper()
           and sidebar_dot._t == 1.0)
     check("theme name shows the new theme in its normal colour",
           app.sidebar._theme_name_label.cget("text") == "Ember"
@@ -182,25 +183,60 @@ def main():
     for name in ThemeManager.get_theme_names():
         ThemeManager.set_theme(name, persist=False)
         app.refresh_theme()
+        app.ensure_themed()              # pages that were hidden follow when they are shown
         settle(0.1)
         theme = ThemeManager.get_theme()
         for page, d in dots.items():
             d.set_active(False)
         settle(0.3)
         for page, d in dots.items():
-            core, ring = shown(d)
+            core, _strength = shown(d)
             check(f"{name}/{page}: dim colour is the theme's muted colour", core == theme["text_muted"].upper(), core)
             check(f"{name}/{page}: surface behind the dot is the card colour",
                   d.cget("bg").upper() == theme["card"].upper(), d.cget("bg"))
         d = dots["Scan"]
         d.set_active(True)
         settle(0.3)
-        core, ring = shown(d)
+        core, strength = shown(d)
         check(f"{name}: bright colour is the theme's success colour", core == theme["success"].upper(), core)
-        check(f"{name}: ring is between card and bright", ring is not None
-              and ring not in (theme["card"].upper(), core), str(ring))
+        check(f"{name}: strong glow", strength >= 0.9, str(strength))
         d.set_active(False)
         settle(0.3)
+
+    # ---- the drawn pixels: a lit lamp, no outline, a strong smooth glow, a crisp core ----
+    from ui import glow
+    for name in ThemeManager.get_theme_names():
+        t = ThemeManager.THEMES[name]
+        for label, surface, colour, core_r, spread, strength, hot in (
+                ("status dot lit", t["card"], t["success"], StatusDot.CORE, StatusDot.GLOW_LIT[0], StatusDot.GLOW_LIT[1],
+                 StatusDot.HOT if t["mode"] == "Dark" else 0.0),
+                ("status dot idle", t["card"], t["text_muted"], StatusDot.CORE, StatusDot.GLOW_IDLE[0], StatusDot.GLOW_IDLE[1], 0.0),
+                ("theme dot", t["navbar"], t["primary"], ThemeDot.CORE, ThemeDot.GLOW[0], ThemeDot.GLOW[1],
+                 ThemeDot.HOT if t["mode"] == "Dark" else 0.0)):
+            for scale in (1.0, 1.25, 1.5):
+                size = StatusDot.SIZE if "status" in label else ThemeDot.SIZE
+                side = round(size * scale)
+                img = glow.render(side, surface.upper(), colour.upper(), round(core_r * scale, 2),
+                                  round(spread * scale, 2), round(strength, 3), round(hot, 3))
+                mid = side // 2
+                row = [img.getpixel((mid + dx, mid)) for dx in range(0, side // 2)]
+                bg = colors.hex_to_rgb(surface)
+                dist = [sum((a - b) ** 2 for a, b in zip(px, bg)) ** 0.5 for px in row]
+                total = max(dist) or 1
+                # no outline or ring: moving away from the middle never gets lighter again, and never jumps
+                # (the core edge, a single anti-aliased step, may drop by up to half the range)
+                rises = [dist[i + 1] - dist[i] for i in range(len(dist) - 1)]
+                check(f"{name}/{label}@{int(scale * 100)}%: no ring (the glow only fades outwards)",
+                      max(rises) <= 0.04 * total + 3, f"largest rise {max(rises):.1f} of {total:.0f}")
+                edge = int(core_r * scale) + 2
+                check(f"{name}/{label}@{int(scale * 100)}%: the glow reaches the edge of the image smoothly",
+                      dist[-1] <= 0.02 * total + 2, f"{dist[-1]:.1f} of {total:.0f}")
+                if label != "status dot idle":
+                    check(f"{name}/{label}@{int(scale * 100)}%: strong glow just outside the core",
+                          dist[min(edge, len(dist) - 1)] >= 0.2 * total, f"{dist[min(edge, len(dist) - 1)]:.0f} of {total:.0f}")
+                corners = [img.getpixel(pt) for pt in ((0, 0), (side - 1, 0), (0, side - 1), (side - 1, side - 1))]
+                check(f"{name}/{label}@{int(scale * 100)}%: nothing at the corners (no square)",
+                      all(sum((a - b) ** 2 for a, b in zip(px, bg)) ** 0.5 <= 2 for px in corners), str(corners))
 
     app.close()
 

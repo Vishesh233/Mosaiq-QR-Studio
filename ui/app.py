@@ -138,6 +138,8 @@ class QRCodeStudioApp:
                        "history": self.history_page, "bulk": self.bulk_page,
                        "settings": self.settings_page}
         self._current_page = None
+        self._page_theme = {key: ThemeManager.get_current_theme() for key in self._pages}   # the theme each page shows
+        self._page_dirty = set()          # pages hidden while the Dark / Light mode flipped: CustomTkinter redrew their canvases
         self._refreshing = False
         self._refresh_again = False
         self._settings_return = "generate"      # where Apply / Cancel go back to
@@ -191,8 +193,29 @@ class QRCodeStudioApp:
         else:                               # Cancel (or a failed save, which has shown its error): stay
             self.sidebar.set_active("settings")
 
+    def _page_up_to_date(self, key):
+        """A page that was hidden while the theme changed is recoloured now (from the theme it shows), so a
+        change only pays for the page on screen. Does nothing for a page that is already current."""
+        current = ThemeManager.get_current_theme()
+        shown = self._page_theme[key]
+        if shown == current and key not in self._page_dirty:
+            return
+        page = self._pages[key]
+        if shown != current:
+            ThemeManager.retheme_tree(page, old=shown)
+        if hasattr(page, "refresh_theme"):
+            page.refresh_theme()
+        self._page_theme[key] = current
+        self._page_dirty.discard(key)
+
+    def ensure_themed(self):
+        """Bring every page up to date (what showing each of them would do)."""
+        for key in self._pages:
+            self._page_up_to_date(key)
+
     def _switch_page(self, key):
         """Show one page (and its title); leaving Scan always releases the camera."""
+        self._page_up_to_date(key)
         if self._current_page == "scan" and key != "scan":
             self.scan_page.on_hide()
         if self._current_page == "settings" and key != "settings":
@@ -212,6 +235,7 @@ class QRCodeStudioApp:
         self._show_page("scan")
 
     def show_bulk_page(self):
+        self._page_up_to_date("bulk")
         self.bulk_page._update_summary()          # the look may have changed on Generate
         self._show_page("bulk")
 
@@ -221,6 +245,7 @@ class QRCodeStudioApp:
         return gp.current_style(), gp.logo_card.get_logo_path()
 
     def show_settings_page(self):
+        self._page_up_to_date("settings")
         if self._current_page != "settings":
             self._settings_return = self._current_page
             self.settings_page.load()
@@ -231,6 +256,7 @@ class QRCodeStudioApp:
         self._show_page(self._settings_return)
 
     def show_history_page(self):
+        self._page_up_to_date("history")
         self.history_page.refresh()
         self._show_page("history")
 
@@ -291,17 +317,25 @@ class QRCodeStudioApp:
         try:
             for _attempt in range(3):           # a change that arrives meanwhile is applied by the next round
                 self._refresh_again = False
+                mode = ctk.get_appearance_mode()
                 step("the window mode", lambda: ThemeManager.apply_mode(self.root))
+                if ctk.get_appearance_mode() != mode:
+                    # CustomTkinter redraws every widget when the mode flips, the hidden pages' scroll canvases
+                    # from the colours of that moment: those pages are recoloured when they are shown.
+                    self._page_dirty.update(key for key in self._pages if key != self._current_page)
                 # Generic pass first: every widget colour that belongs to the previous theme moves to
                 # the same token of the new one (covers any widget a component's own refresh_theme
                 # does not know about).
-                step("the generic pass", lambda: ThemeManager.retheme_tree(self.root))
+                hidden = [page for key, page in self._pages.items() if key != self._current_page]
+                step("the generic pass", lambda: ThemeManager.retheme_tree(self.root, skip=hidden))
                 step("the window", lambda: self.root.configure(fg_color=ThemeManager.get_theme()["background"]))
                 step("the sidebar", self.sidebar.refresh_theme)
                 step("the header", self.header.refresh_theme)
-                for name, page in self._pages.items():
-                    if hasattr(page, "refresh_theme"):
-                        step(f"the {name} page", page.refresh_theme)
+                shown = self._current_page         # only the page on screen now; the others follow when they are shown
+                if shown is not None and hasattr(self._pages[shown], "refresh_theme"):
+                    step(f"the {shown} page", self._pages[shown].refresh_theme)
+                if shown is not None:
+                    self._page_theme[shown] = ThemeManager.get_current_theme()
                 self.root.update_idletasks()
                 if not (self._refresh_again or ThemeManager.needs_retheme()):
                     break

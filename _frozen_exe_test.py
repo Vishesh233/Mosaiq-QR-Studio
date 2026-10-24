@@ -22,7 +22,8 @@ import tkinter as tk
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-EXE = os.path.join(HERE, "dist", "MosaiqQRStudio", "MosaiqQRStudio.exe")
+# MOSAIQ_TEST_EXE points the test at another copy of the build (the cold-start check runs a fresh copy each time).
+EXE = os.environ.get("MOSAIQ_TEST_EXE") or os.path.join(HERE, "dist", "MosaiqQRStudio", "MosaiqQRStudio.exe")
 
 # This process drives real mouse coordinates, so it must be per-monitor aware itself.
 ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
@@ -70,6 +71,7 @@ def main():
         sys.exit(2)
 
     env = dict(os.environ, QRSTUDIO_NO_SPLASH="1")
+    launched = time.time()
     proc = subprocess.Popen([EXE], env=env)
     target_root = tk.Tk()
     target_root.withdraw()
@@ -107,6 +109,7 @@ def main():
         check("exe window appears", bool(hwnd))
         if not hwnd:
             return
+        print(f"[exe] timing: window after {time.time() - launched:.1f} s")
         pump(3)
 
         # ---- DPI awareness comes from the manifest ----
@@ -189,6 +192,7 @@ def main():
             win32api.SetCursorPos((x0 + (x1 - x0) * i // 10, y0 + (y1 - y0) * i // 10)); pump(0.03)
         pump(0.3)
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        released = time.time()
 
         back = wait_for(lambda: win32gui.IsWindowVisible(hwnd), 8)
         check("window comes back", bool(back))
@@ -224,7 +228,13 @@ def main():
 
         clipboard_text()
         got = None
-        for x, y in ((button_x, button_y), (button_x, button_y + 14), (button_x, button_y - 14)):
+        # The first scan after a cold start can take a while (OpenCV is loaded by it): keep trying for 30 s
+        # and say how long it took.
+        positions = ((button_x, button_y), (button_x, button_y + 14), (button_x, button_y - 14))
+        attempt = 0
+        while not got and time.time() - released < 30:
+            x, y = positions[attempt % 3]
+            attempt += 1
             click(left + x, top + y)
             for _ in range(10):
                 try:
@@ -237,9 +247,9 @@ def main():
                     break
                 except win32clipboard.error:
                     time.sleep(0.05)
-            if got:
-                break
+        print(f"[exe] timing: the result was there {time.time() - released:.1f} s after the drag ({attempt} click(s))")
         check("the exe decoded the region (Copy password gives the password)", got == "region-pass-125", repr(got))
+        check("... within 12 s of the drag", time.time() - released < 12, f"{time.time() - released:.1f} s")
 
         # ---- closing with WM_CLOSE exits by itself ----
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)

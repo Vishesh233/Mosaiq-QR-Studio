@@ -80,6 +80,7 @@ class ScanPage(TwoColumnPage):
             self.result_card.clear()
             return
 
+        self._show_reading()
         try:
             result = QRScanner.decode(image_path)
         except ScanError as e:
@@ -90,6 +91,11 @@ class ScanPage(TwoColumnPage):
             self._show_result(result)
         else:
             self.result_card.set_message(self.NOT_FOUND)
+
+    def _show_reading(self):
+        """Put "Reading the code…" on screen before the (possibly slow, first) decode blocks the window."""
+        self.result_card.set_reading()
+        self.result_card.update_idletasks()
 
     def _show_result(self, text):
         """Show a decoded text and keep it in the history."""
@@ -335,6 +341,7 @@ class ScanPage(TwoColumnPage):
     def scan_image(self, image):
         """Decode a PIL image (clipboard, screen region, drop) into the result panel."""
 
+        self._show_reading()
         try:
             result = QRScanner.decode_image(image)
         except ScanError as e:          # includes ScannerUnavailable

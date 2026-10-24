@@ -462,7 +462,7 @@ class ThemeManager:
         return cls._applied != cls.current_theme
 
     @classmethod
-    def retheme_tree(cls, root):
+    def retheme_tree(cls, root, old=None, skip=()):
         """Recolour every widget under ``root`` from the shown theme to the active one.
 
         Each colour option holding a token value of the previously applied
@@ -470,21 +470,28 @@ class ThemeManager:
         never wrote a ``refresh_theme`` (or missed a widget) still follow the
         theme. Widgets showing user data or other themes' colours set
         ``_theme_skip = True`` and are left alone, together with their children.
+
+        ``old`` names the theme the widgets under ``root`` show when that is not the one applied last
+        (a page that was hidden while the theme changed); the "applied last" record is then left alone.
+        ``skip`` lists widgets (with their children) not to touch now (the hidden pages).
         """
-        old = cls.THEMES[cls._applied]
+        explicit = old is not None
+        old_theme = cls.THEMES[old if explicit else cls._applied]
         new = cls.get_theme()
         mapping = {}
-        for key, value in old.items():
+        for key, value in old_theme.items():
             if key not in cls.META_KEYS:
                 mapping[value.upper()] = new[key]
-        cls._applied = cls.current_theme
+        if not explicit:
+            cls._applied = cls.current_theme
         if not mapping:
             return
 
+        skipped = set(skip)
         stack = [root]
         while stack:
             widget = stack.pop()
-            if getattr(widget, "_theme_skip", False):
+            if getattr(widget, "_theme_skip", False) or widget in skipped:
                 continue
             changes = {}
             for opt in _COLOR_OPTIONS:

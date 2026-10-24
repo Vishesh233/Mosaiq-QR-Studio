@@ -112,6 +112,7 @@ def main():
               and root.cget("fg_color").upper() == ThemeManager.THEMES[current]["background"].upper()
               and app.header._title_label.cget("text_color") in (ThemeManager.THEMES[current]["text"],
                                                                   ThemeManager.THEMES[current]["text"].lower()))
+        app.ensure_themed()                   # what showing each page does: a page hidden during the change follows then
         stray = []
         contrast.audit_tree(root, current, label, stray)
         check(f"[{label}] no widget holds a colour of another theme", not stray, str(stray[:3]))
@@ -279,22 +280,25 @@ def main():
         animate=False)
 
     # ---- a second change asked for in the middle of every stage of a refresh (the half-applied-theme bug) ----
+    # (owner, method, the page that must be on screen for that stage to run: a change only recolours the page
+    # on screen, the others follow when they are shown)
     stages = {
-        "the generic pass": (ThemeManager, "retheme_tree"),
-        "the sidebar": (app.sidebar, "refresh_theme"),
-        "the header": (app.header, "refresh_theme"),
-        "the Generate page": (app.generate_page, "refresh_theme"),
-        "its preview card": (app.generate_page.preview_card, "refresh_theme"),
-        "the Scan page": (app.scan_page, "refresh_theme"),
-        "the History page": (app.history_page, "refresh_theme"),
-        "the Bulk page": (app.bulk_page, "refresh_theme"),
-        "the Settings page": (page, "refresh_theme"),
+        "the generic pass": (ThemeManager, "retheme_tree", "generate"),
+        "the sidebar": (app.sidebar, "refresh_theme", "generate"),
+        "the header": (app.header, "refresh_theme", "generate"),
+        "the Generate page": (app.generate_page, "refresh_theme", "generate"),
+        "its preview card": (app.generate_page.preview_card, "refresh_theme", "generate"),
+        "the Scan page": (app.scan_page, "refresh_theme", "scan"),
+        "the History page": (app.history_page, "refresh_theme", "history"),
+        "the Bulk page": (app.bulk_page, "refresh_theme", "bulk"),
+        "the Settings page": (page, "refresh_theme", "settings"),
     }
 
     def interrupted(stage, when, first, second, ):
-        owner, attribute = stages[stage]
+        owner, attribute, on_screen = stages[stage]
 
         def step():
+            nav(on_screen)()
             original = getattr(owner, attribute)
             fired = {"n": 0}
 

@@ -102,6 +102,25 @@ def main():
     settle()
     check("image tile selected again", uc.image_button._selected and not uc.camera_button._selected)
 
+    # ---- the first scan after a cold start can take seconds (OpenCV loads): "Reading" is on screen first ----
+    from utils.qr_scanner import QRScanner
+    seen = {}
+    real_decode = QRScanner.decode_image
+
+    def spying_decode(image):
+        seen["chip"], seen["label"] = rc.status_chip.cget("text"), rc.result_label.cget("text")
+        return real_decode(image)
+
+    QRScanner.decode_image = staticmethod(spying_decode)
+    try:
+        sp.scan_image(QRGenerator().generate("https://example.com/reading"))
+    finally:
+        QRScanner.decode_image = staticmethod(real_decode)
+    check("'Reading the code…' is shown while the picture is decoded",
+          seen.get("chip") == "Reading" and "Reading" in (seen.get("label") or ""), str(seen))
+    check("... and the result replaces it", rc.result == "https://example.com/reading"
+          and rc.status_chip.cget("text") != "Reading", rc.status_chip.cget("text"))
+
     # ---- empty and error states ----
     rc.clear()
     check("empty state text", "Nothing yet" in rc.result_label.cget("text"),

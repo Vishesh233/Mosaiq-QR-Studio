@@ -93,14 +93,15 @@ def check_tokens(problems, report=False):
 
 def check_status_dot(name, t, problems, report=False):
     """The card status dot: dim must be visible, bright clearly different from dim, and the
-    glow ring visible around the bright dot (see ui.widgets.StatusDot)."""
+    glow strong around the bright dot (see ui.widgets.StatusDot)."""
     import math
 
+    from ui import glow
     from ui.widgets import StatusDot
     from utils import colors
 
     dim, bright, surface = StatusDot.colours(t)
-    ring = colors.blend(surface, bright, StatusDot.RING_STRENGTH)
+    ring = glow.edge_colour(surface, bright, StatusDot.CORE, *StatusDot.GLOW_LIT)
     dim_on_card = ratio(dim, surface)
     bright_on_card = ratio(bright, surface)
     bright_vs_dim = ratio(bright, dim)
@@ -108,7 +109,7 @@ def check_status_dot(name, t, problems, report=False):
     ring_apart = math.dist(colors.hex_to_rgb(ring), colors.hex_to_rgb(surface))
     if report:
         print(f"{name:12s} status dot: dim {dim_on_card:.2f}, bright {bright_on_card:.2f}, "
-              f"bright/dim {bright_vs_dim:.2f} (distance {apart:.0f}), ring {ring_apart:.0f}")
+              f"bright/dim {bright_vs_dim:.2f} (distance {apart:.0f}), glow {ring_apart:.0f}")
     if dim_on_card < 3.0:
         problems.append(f"{name}: status dot dim state hard to see ({dim_on_card:.2f} < 3.0 on the card)")
     if bright_on_card < 4.5:
@@ -116,7 +117,7 @@ def check_status_dot(name, t, problems, report=False):
     if bright_vs_dim < 1.3 or apart < 80:
         problems.append(f"{name}: status dot bright and dim look alike (ratio {bright_vs_dim:.2f}, distance {apart:.0f})")
     if ring_apart < 40:
-        problems.append(f"{name}: status dot glow ring not visible (distance {ring_apart:.0f} < 40)")
+        problems.append(f"{name}: status dot glow not visible (distance {ring_apart:.0f} < 40)")
     # the sidebar's theme dot: accent on the navbar
     if ratio(t["primary"], t["navbar"]) < 3.0:
         problems.append(f"{name}: sidebar theme dot (primary on navbar) = {ratio(t['primary'], t['navbar']):.2f} < 3.0")
@@ -210,6 +211,12 @@ def check_widgets(problems):
     root.update()
     names = ThemeManager.get_theme_names()
 
+    # A fresh start, before any theme change: nothing may still hold CustomTkinter's grey defaults (the
+    # segments of every segmented control used to, until the first re-theme).
+    for key, widget in (("generate", app.generate_page), ("scan", app.scan_page), ("history", app.history_page),
+                        ("bulk", app.bulk_page), ("settings", app.settings_page)):
+        audit_tree(widget, ThemeManager.get_current_theme(), f"fresh start/{key}", problems)
+
     def pages():
         yield "generate", app.show_generate_page
         yield "scan", app.show_scan_page
@@ -222,6 +229,7 @@ def check_widgets(problems):
     def audit_all(theme_name, how):
         for label, show in pages():
             show()
+            app.ensure_themed()           # a page hidden during the change is recoloured when it is shown
             root.update_idletasks()
             # Audit the whole window: sidebar, header and every page (hidden pages too).
             audit_tree(root, theme_name, f"{how}/{label}", problems)

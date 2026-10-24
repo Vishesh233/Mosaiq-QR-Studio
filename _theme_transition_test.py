@@ -174,6 +174,7 @@ def shown_theme_is(app, name):
 def stray_colours(app, name):
     """CustomTkinter widgets under the window that hold a colour which is not a token of theme ``name``."""
     import _theme_contrast_test as contrast
+    app.ensure_themed()                      # a page hidden during the change is recoloured when it is shown
     found = []
     contrast.audit_tree(app.root, name, "leak", found)
     return found
@@ -683,6 +684,31 @@ def test_on_screen():
     check("a change asked for from inside a refresh ends with the latest theme, complete",
           ThemeManager.get_current_theme() == "Daylight" and shown_theme_is(app, "Daylight")
           and not stray_colours(app, "Daylight"), str(stray_colours(app, "Daylight")[:3]))
+
+    # --- a change recolours the page on screen; the other pages follow when they are shown ---
+    import _theme_contrast_test as contrast
+    app.show_generate_page()
+    app.ensure_themed()
+    ThemeManager.set_theme("Midnight", persist=False)
+    app.refresh_theme()
+    app.ensure_themed()
+    ThemeManager.set_theme("Emerald", persist=False)
+    app.refresh_theme()
+    here = []
+    contrast.audit_tree(app.generate_page, "Emerald", "page on screen", here)
+    check("the page on screen is recoloured at once", not here, str(here[:2]))
+    others = {"scan": app.scan_page, "history": app.history_page, "bulk": app.bulk_page, "settings": app.settings_page}
+    check("the pages that are hidden are left for later (a change costs only the visible page)",
+          all(app._page_theme[k] == "Midnight" for k in others), str(app._page_theme))
+    for key, widget in others.items():
+        getattr(app, f"show_{key}_page")()
+        settle(0.1)
+        found = []
+        contrast.audit_tree(widget, "Emerald", f"{key} page shown", found)
+        check(f"the {key} page is recoloured when it is shown", not found and app._page_theme[key] == "Emerald", str(found[:2]))
+    app.settings_page.cancel() if app._current_page == "settings" else None
+    app.show_generate_page()
+    manager.finish()
 
     # --- the log says what happened to every change ---
     log_before = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()

@@ -223,6 +223,13 @@ class ScanResultCard(SectionCard):
         self.result_box.configure(border_color=theme["danger"])
         self.status_dot.set_active(False)          # nothing decoded: the dot stays dim
 
+    def set_reading(self):
+        """Say that a picture is being read (the first scan after start-up loads OpenCV, which can take
+        a few seconds on a cold start, and the window is busy until it is done)."""
+        self.clear()
+        self.result_label.configure(text="Reading the code…")
+        self.status_chip.configure(text="Reading")
+
     # ==================================================
 
     def _clear_fields(self):
