@@ -585,7 +585,10 @@ def test_on_screen():
         box = [w for w in root.winfo_children() if type(w).__name__ == "CTkToplevel"][-1]
         seen_box["rect"] = (box.winfo_rootx(), box.winfo_rooty(), box.winfo_rootx() + box.winfo_width(),
                             box.winfo_rooty() + box.winfo_height())
+        box.focus_force()                  # key events go to the window that has the focus
+        box.update()
         box.event_generate("<Escape>")
+        root.after(1500, lambda: box.winfo_exists() and box.destroy())     # never hang the test if the key is lost
 
     root.after(600, look_at_box)
     dialogs.real_ask_save_changes(root)

@@ -247,10 +247,18 @@ def main():
 
     for label, expected in (("Save", "save"), ("Don't save", "discard"), ("Cancel", "cancel")):
         root.after(500, lambda label=label: press(label))
+        root.after(8000, lambda: [w.destroy() for w in root.winfo_children() if isinstance(w, ctk.CTkToplevel)])  # failsafe
         check(f"the real window answers {expected} for [{label}]",
               _test_dialogs.real_ask_save_changes(root) == expected)
     check("the real window offers Save, Don't save and Cancel", box_seen[0] == ["Cancel", "Don't save", "Save"], str(box_seen))
-    root.after(500, lambda: [w for w in root.winfo_children() if isinstance(w, ctk.CTkToplevel)][-1].event_generate("<Escape>"))
+    def escape():
+        box = [w for w in root.winfo_children() if isinstance(w, ctk.CTkToplevel)][-1]
+        box.focus_force()                  # key events go to the window that has the focus
+        box.update()
+        box.event_generate("<Escape>")
+        root.after(1500, lambda: box.winfo_exists() and box.destroy())     # never hang the test if the key is lost
+
+    root.after(500, escape)
     check("Escape in the real window means Cancel", _test_dialogs.real_ask_save_changes(root) == "cancel")
 
     # ---- a failed write is shown, nothing is half-written, the choices stay ----
