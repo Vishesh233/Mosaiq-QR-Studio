@@ -9,6 +9,8 @@ font and no image files are needed.
 Primitives: ("rect", x, y, w, h, r)  ("circle", cx, cy, r)  ("line", (x, y), (x, y), ...)
             ("arc", cx, cy, r, start_deg, end_deg)  ("dot", x, y)
 """
+import math
+
 import customtkinter as ctk
 from PIL import Image, ImageDraw
 
@@ -34,6 +36,10 @@ ICONS = {
     "bulk": [
         ("rect", 3, 4, 18, 16, 2), ("line", (3.9, 10), (20.1, 10)), ("line", (9, 4.9), (9, 19.1)),
     ],
+    # a cog: a ring, a hub and eight teeth
+    "settings": [("circle", 12, 12, 6.2), ("circle", 12, 12, 2.4)] + [
+        ("line", (12 + 6.2 * math.cos(a), 12 + 6.2 * math.sin(a)), (12 + 9.4 * math.cos(a), 12 + 9.4 * math.sin(a)))
+        for a in (i * math.pi / 4 for i in range(8))],
     # QR types
     "url": [
         ("line", (10, 14), (11, 14.8), (13, 15), (15, 14), (19, 10), (19.5, 7), (17, 4.5), (14, 5), (12, 7)),

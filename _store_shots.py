@@ -129,19 +129,11 @@ def _one(name, outdir):
         app.bulk_page._update_summary()
         save()
     elif name == "theme_settings":
-        from PIL import Image, ImageEnhance
-
-        from ui.dialogs.settings_dialog import SettingsDialog
         design_and_generate("Colours")
-        backdrop = ImageEnhance.Brightness(capture_window(hwnd)).enhance(0.45)
-        dlg = SettingsDialog(app.header)
-        dlg.geometry("+300+40")
+        app.show_settings_page()                  # the theme gallery is a page of the window
         _settle(root, 1.2)
-        dialog = capture_window(win32gui.GetAncestor(dlg.winfo_id(), 2))
-        canvas = backdrop.copy()
-        canvas.paste(dialog, ((WIDTH - dialog.width) // 2, max(0, (HEIGHT - dialog.height) // 2)))
-        save(canvas)
-        dlg.destroy()
+        save()
+        app.settings_page.cancel()
     app.close()
 
 

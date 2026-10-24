@@ -396,11 +396,10 @@ def _run():
     if manifest.find("m:Identity", ns).get("Version") != "2.2.0.0":
         problems.append("manifest identity version is not 2.2.0.0")
 
-    # --- Settings dialog opens and closes cleanly ---
-    from ui.dialogs.settings_dialog import SettingsDialog
-    dlg = SettingsDialog(app.header)
+    # --- the Settings page opens and closes cleanly ---
+    app.show_settings_page()
     root.update_idletasks()
-    dlg.destroy()
+    app.settings_page.cancel()
     root.update_idletasks()
 
     # --- Settings APPLY actually re-themes the app shell (regression guard) ---
@@ -412,9 +411,9 @@ def _run():
     root.update_idletasks()
     bg_before = app.root.cget("fg_color")
 
-    dlg2 = SettingsDialog(app.header)
-    dlg2.preview_theme(other)        # live preview re-themes the app
-    dlg2.apply()                     # saves the choice + closes the dialog
+    app.show_settings_page()
+    app.settings_page.preview_theme(other)      # live preview re-themes the app
+    app.settings_page.apply_and_close()         # saves the choice + goes back
     root.update_idletasks()
     bg_after = app.root.cget("fg_color")
     if bg_before == bg_after:

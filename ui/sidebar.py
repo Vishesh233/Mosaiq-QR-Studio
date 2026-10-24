@@ -1,14 +1,13 @@
 """Left navigation sidebar.
 
 Fixed-width sidebar: brand, icon + label navigation with an accent bar on the active item,
-and a compact footer (current theme + Settings). Navigation entries are added by the app
-with ``add_nav_item`` so a page only appears once it exists.
+and a compact footer (current theme, then Settings as the last entry). Navigation entries are
+added by the app with ``add_nav_item`` so a page only appears once it exists.
 """
 import customtkinter as ctk
 
 from config import APP_SHORT_NAME, APP_VERSION, SIDEBAR_WIDTH
 from utils.theme_manager import ThemeManager
-from ui import icons
 from ui.brand_logo import logo_ctk_image
 from ui.line_icons import line_icon
 from ui.widgets import ThemeDot
@@ -40,7 +39,6 @@ class Sidebar(ctk.CTkFrame):
         self._footer_sep = None
         self._theme_dot = None
         self._theme_name_label = None
-        self._settings_link = None
 
         self.grid_propagate(False)
         self._build()
@@ -98,12 +96,12 @@ class Sidebar(ctk.CTkFrame):
         )
         self._section_label.grid(row=0, column=0, sticky="w", padx=24, pady=(0, 8))
 
-        # ---------------- Footer: theme name + Settings ----------------
+        # ---------------- Footer: theme name, then Settings (a page like the others) ----------------
         self._footer_sep = ctk.CTkFrame(self, height=1, fg_color=theme["border"])
         self._footer_sep.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 12))
 
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 16))
+        footer.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 6))
         footer.grid_columnconfigure(1, weight=1)
 
         self._theme_dot = ThemeDot(footer)
@@ -113,23 +111,22 @@ class Sidebar(ctk.CTkFrame):
             font=("Segoe UI", 11), text_color=theme["text_secondary"],
         )
         self._theme_name_label.grid(row=0, column=1, sticky="w")
-        self._settings_link = ctk.CTkButton(
-            footer, text=f"{icons.icon('settings')}  Settings",
-            font=("Segoe UI", 11), width=0, height=28, corner_radius=8,
-            fg_color="transparent", hover_color=theme["card_hover"],
-            text_color=theme["text_secondary"], command=self._open_settings,
-        )
-        self._settings_link.grid(row=0, column=2, sticky="e")
+
+        self._footer_nav = ctk.CTkFrame(self, fg_color="transparent")
+        self._footer_nav.grid(row=4, column=0, sticky="ew", pady=(0, 14))
+        self._footer_nav.grid_columnconfigure(0, weight=1)
 
     # ------------------------------------------------------------------
-    def add_nav_item(self, key, label, icon_name, callback):
-        """Add a navigation entry (icon + label). Order of calls = order on screen."""
+    def add_nav_item(self, key, label, icon_name, callback, bottom=False):
+        """Add a navigation entry (icon + label). Order of calls = order on screen; ``bottom`` puts it
+        in the footer under the theme name (Settings)."""
         theme = ThemeManager.get_theme()
         self._nav_callbacks[key] = callback
         self._nav_icons[key] = icon_name
-        row = len(self._nav_buttons) + 1
+        parent = self._footer_nav if bottom else self._nav_wrap
+        row = len(parent.winfo_children())          # the section label is row 0 of the navigation
 
-        item = ctk.CTkFrame(self._nav_wrap, fg_color="transparent")
+        item = ctk.CTkFrame(parent, fg_color="transparent")
         item.grid(row=row, column=0, sticky="ew", pady=2)
         item.grid_columnconfigure(1, weight=1)
 
@@ -158,11 +155,6 @@ class Sidebar(ctk.CTkFrame):
         self._refresh_active()
 
     # ------------------------------------------------------------------
-    def _open_settings(self):
-        app = getattr(self.winfo_toplevel(), "app", None)
-        if app is not None:
-            app.header.open_settings()
-
     def navigate(self, key):
         """A click on a nav item: highlight it and open its page."""
         self.set_active(key)
@@ -206,6 +198,4 @@ class Sidebar(ctk.CTkFrame):
         self._theme_name_label.configure(
             text=ThemeManager.get_current_theme(), text_color=theme["text_secondary"])
         self._theme_dot.refresh_theme()          # blends to the new colour with a spreading ring
-        self._settings_link.configure(
-            hover_color=theme["card_hover"], text_color=theme["text_secondary"])
         self._refresh_active()

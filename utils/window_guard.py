@@ -45,6 +45,21 @@ def centred(width, height, area):
 
 # ------------------------------------------------------------------ Windows queries
 
+def centred_over(parent_rect, work_areas, size_px):
+    """(x, y) in physical px for a window of ``size_px`` = (width, height): centred over the parent
+    rectangle (left, top, right, bottom), then moved so the WHOLE window is inside the work area of
+    the monitor the parent is on. None when the parent is on no monitor (the system places it then)."""
+    centre_x = (parent_rect[0] + parent_rect[2]) / 2
+    centre_y = (parent_rect[1] + parent_rect[3]) / 2
+    area = next((a for a in work_areas if a[0] <= centre_x < a[2] and a[1] <= centre_y < a[3]), None)
+    if area is None:
+        return None
+    width, height = size_px
+    x = min(max(round(centre_x - width / 2), area[0]), max(area[0], area[2] - width))
+    y = min(max(round(centre_y - height / 2), area[1]), max(area[1], area[3] - height))
+    return x, y
+
+
 def work_areas():
     """Work areas (without the taskbar) of every monitor; primary first. [] off Windows."""
     if not sys.platform.startswith("win"):

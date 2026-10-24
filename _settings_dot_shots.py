@@ -22,8 +22,6 @@ def _one(theme, outdir):
 
     from _window_capture import capture_window
     from ui.app import QRCodeStudioApp
-    from ui.dialogs.settings_dialog import SettingsDialog
-
     app = QRCodeStudioApp()
     root = app.root
     root.geometry("1440x900+40+20")
@@ -46,12 +44,10 @@ def _one(theme, outdir):
     settle(2.0)                                   # fade finished, test scan done
     capture_window(hwnd).save(os.path.join(outdir, f"{theme}-generate-bright-dot.png"))
 
-    dlg = SettingsDialog(app.header)
-    dlg.geometry("+120+40")
+    app.show_settings_page()
     settle(1.2)
-    capture_window(win32gui.GetAncestor(dlg.winfo_id(), 2)).save(
-        os.path.join(outdir, f"{theme}-settings-footer.png"))
-    dlg.cancel()
+    capture_window(hwnd).save(os.path.join(outdir, f"{theme}-settings-footer.png"))
+    app.settings_page.cancel()
     app.close()
 
 

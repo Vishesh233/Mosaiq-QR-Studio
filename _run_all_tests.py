@@ -22,7 +22,8 @@ DESKTOP = {"_camera_test.py", "_region_test.py", "_dnd_test.py", "_installed_app
 EXE_TESTS = {"_frozen_exe_test.py", "_installed_app_test.py"}          # need a build first
 RETRY = {"_dnd_test.py"}
 SLOW_TIMEOUT = 420
-TIMEOUTS = {"_theme_contrast_test.py": 1200}      # every theme change on every page
+TIMEOUTS = {"_theme_contrast_test.py": 1200,      # every theme change on every page
+            "_theme_leak_test.py": 1800}          # ~70 switch sequences, each audited on every page
 
 
 def _kill_group(job):

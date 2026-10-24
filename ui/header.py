@@ -1,7 +1,6 @@
 import customtkinter as ctk
 
 from utils.theme_manager import ThemeManager
-from ui.dialogs.settings_dialog import SettingsDialog
 from ui.layout import GRID, PAGE_PADX
 from ui import icons
 
@@ -86,7 +85,8 @@ class Header(ctk.CTkFrame):
 
     # ==================================================
     def open_settings(self):
-        SettingsDialog(self)
+        """The gear button: the Settings page (a page of the main window)."""
+        self.winfo_toplevel().app.show_settings_page()
 
     # ==================================================
     def refresh_theme(self):

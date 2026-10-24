@@ -2,8 +2,9 @@
 
 Covers the maths (mask at T=0 and T=1, growth that never shrinks, the order of the three patches,
 droplets, the edge glow outside the union only), the snapshot (own window only), the behaviour on
-screen (it runs for live changes and reverts, skips on click / key / resize, a new change finishes
-the old animation first, off switch, Windows animations off, snapshot failure, not at start-up),
+screen (it runs for live changes and reverts, on the Settings page too, skips on click / key / move /
+resize / minimize / focus loss, a new change finishes the old animation first, changes never overlap,
+off switches, snapshot failure, not at start-up), the reason of every start and skip in mosaiq.log,
 the sizes at different scalings, and a frame-time benchmark.
 
 Run:  .venv\\Scripts\\python.exe _theme_transition_test.py
@@ -164,6 +165,20 @@ def test_maths():
         bench[f"compose {big[0]}x{big[1]} q={quality}"] = (time.perf_counter() - started) / 30 * 1000
 
 
+def shown_theme_is(app, name):
+    from utils.theme_manager import ThemeManager
+    return (ThemeManager.get_current_theme() == name and app.sidebar._theme_name_label.cget("text") == name
+            and app.root.cget("fg_color").upper() == ThemeManager.THEMES[name]["background"].upper())
+
+
+def stray_colours(app, name):
+    """CustomTkinter widgets under the window that hold a colour which is not a token of theme ``name``."""
+    import _theme_contrast_test as contrast
+    found = []
+    contrast.audit_tree(app.root, name, "leak", found)
+    return found
+
+
 def test_on_screen():
     import customtkinter as ctk
 
@@ -172,7 +187,6 @@ def test_on_screen():
     os.environ.pop("QRSTUDIO_NO_THEME_ANIMATION", None)      # this test is about the animation
 
     from ui.app import QRCodeStudioApp
-    from ui.dialogs.settings_dialog import SettingsDialog
     from utils import settings_store, theme_transition as tt
     from utils.theme_manager import ThemeManager
 
@@ -204,15 +218,45 @@ def test_on_screen():
     # --- a live change runs; the new theme is already applied underneath ---
     seen = {}
 
+    def own_pixels(window, points):
+        """Pixels of a window's own surface (PrintWindow of that window: nothing else on the screen).
+        A window that was shown a moment ago may still answer blank: ask again for up to a second."""
+        for _attempt in range(20):
+            try:
+                image = real_capture_client(window)
+                break
+            except tt.SnapshotError:
+                time.sleep(0.05)
+                window.update_idletasks()
+        else:
+            image = real_capture_client(window)
+        return [image.getpixel(pt) for pt in points]
+
+    taken = []
+    real_capture_client = tt.capture_client
+
+    def recording_capture(window):
+        image = real_capture_client(window)
+        taken.append(image)
+        return image
+
+    tt.capture_client = recording_capture
+    points = [(40, 40), (400, 300), (900, 500), (1200, 700), (150, 400)]
+
     def change_emerald():
         shown = overlays()
         seen.update(count=len(shown), visible=bool(shown) and all(o.winfo_viewable() for o in shown), running=manager.running)
+        if shown:
+            seen["painted"] = own_pixels(shown[0], points) == [taken[0].getpixel(pt) for pt in points]
         ThemeManager.set_theme("Emerald", persist=False)
         app.refresh_theme()
 
     started = manager.run(change_emerald)
+    tt.capture_client = real_capture_client
     check("the old picture is already on screen when the change is applied (the window does not look frozen)",
-          seen == {"count": 1, "visible": True, "running": True}, str(seen))
+          seen.get("count") == 1 and seen.get("visible") is True and seen.get("running") is True, str(seen))
+    check("... and it is really painted there (the overlay's own pixels are the old picture)",
+          seen.get("painted") is True, str(seen))
     check("a theme change starts an animation", started is True and manager.running)
     check("the final theme is applied at once", ThemeManager.get_current_theme() == "Emerald"
           and app.sidebar._theme_name_label.cget("text") == "Emerald")
@@ -309,19 +353,41 @@ def test_on_screen():
     settle(0.5)
     check("... and the window comes back normally", root.state() in ("normal", "zoomed"))
 
-    # --- losing the focus to another program ends it; moving the focus to our own dialog does not ---
-    manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
-    settle(0.2)
+    # --- losing the focus: only when the user really went to another program, and never in the first 300 ms ---
     real_focus = root.focus_displayof
-    root.focus_displayof = lambda: root                      # focus stays in the application
-    root.event_generate("<FocusOut>")
+    real_other = tt.another_program_has_focus
+
+    def focus_out():
+        root.event_generate("<FocusOut>")
+
+    manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
+    settle(0.12)                                              # the skip handlers are attached by now
+    root.focus_displayof = lambda: None
+    tt.another_program_has_focus = lambda: True               # the user really is in another program ...
+    focus_out()
+    settle(0.12)                                              # ... but this is within the first 300 ms
+    check("a focus change in the first 300 ms is ignored", manager.running)
+    settle(0.3)
+    focus_out()                                               # later: the same event ends it
+    settle(0.3)
+    check("focus really going to another program ends the animation", not manager.running and not overlays())
+
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    settle(0.5)
+    root.focus_displayof = lambda: root                       # focus stays in the application
+    tt.another_program_has_focus = lambda: True
+    focus_out()
     settle(0.3)
     check("focus moving inside the application does not end the animation", manager.running)
-    root.focus_displayof = lambda: None                      # focus went to another program
-    root.event_generate("<FocusOut>")
+    root.focus_displayof = lambda: None                       # no focus widget, but no other program in front either
+    tt.another_program_has_focus = lambda: False
+    focus_out()
     settle(0.3)
+    check("a moment without focus (windows being activated) does not end it", manager.running)
     root.focus_displayof = real_focus
-    check("focus going to another program ends the animation", not manager.running and not overlays())
+    tt.another_program_has_focus = real_other
+    manager.finish()
+    check("the foreground check works on this PC", tt.another_program_has_focus() in (True, False))
 
     # --- a worker that hangs never keeps the overlay (or the window) waiting ---
     real_render = tt.FrameRenderer.render
@@ -434,69 +500,234 @@ def test_on_screen():
     log = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()
     check("failed snapshot: no animation but the theme changes", ok is False and not overlays()
           and ThemeManager.get_current_theme() == "Graphite")
-    check("... and a warning is logged", "Theme transition skipped" in log and "test failure" in log, log[-300:])
+    check("... and a warning is logged", "not started (snapshot-failed" in log and "test failure" in log, log[-300:])
 
-    # --- the Settings dialog: previews and reverts animate, the switch decides, the dialog changes at once ---
+    # --- the Settings page: a click on a theme card animates the WHOLE window (the page included) ---
     ThemeManager.set_theme("Midnight", persist=False)
     app.refresh_theme()
     settle(0.3)
-    # a few dialogs in a row: each one is placed on screen with its footer visible (Windows alone would
-    # cascade them lower and lower)
-    from utils import window_guard
-    for _n in range(4):
-        probe = SettingsDialog(app.header)
-        settle(0.4)
-        areas = window_guard.work_areas()
-        rect = (probe.winfo_rootx(), probe.winfo_rooty(), probe.winfo_rootx() + probe.winfo_width(),
-                probe.winfo_rooty() + probe.winfo_height())
-        centre = ((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2)
-        area = next((a for a in areas if a[0] <= centre[0] < a[2] and a[1] <= centre[1] < a[3]), None)
-        check(f"dialog {_n + 1}: the whole dialog (footer included) is inside its monitor's work area",
-              area is not None and rect[3] <= area[3] + 2 and rect[1] >= area[1] - 2, f"{rect} in {area}")
-        probe.cancel()
-        settle(0.3)
-    dlg = SettingsDialog(app.header)
+    app.sidebar.navigate("settings")
+    settle(0.5)
+    page = app.settings_page
+    check("Settings is a page of the window, so no second window can hide the effect",
+          page.winfo_toplevel() is root and app._current_page == "settings")
+    runs = manager.runs
+    taken.clear()
+    tt.capture_client = recording_capture
+    tile = page._tiles["Emerald"]
+    tile._canvas.event_generate("<Button-1>", x=6, y=6)       # a real click on the theme card
+    settle(0.05)
+    tt.capture_client = real_capture_client
+    check("a click on a theme card starts the animation", manager.runs == runs + 1 and manager.running)
+    check("... on the main window, which holds the Settings page", len(manager._overlays) == 1
+          and manager._overlays[0].window is root)
+    check("... and the new theme is already applied underneath", ThemeManager.get_current_theme() == "Emerald"
+          and page._selected == "Emerald")
+    overlay = manager._overlays[0]
+    check("overlay, snapshots and window have the same size", overlay.size == (root.winfo_width(), root.winfo_height())
+          and all(img.size == overlay.size for img in taken), f"{overlay.size} {[i.size for i in taken]}")
+    import numpy as np
+    before_img, after_img = np.asarray(taken[0]).astype(int), np.asarray(taken[-1]).astype(int)
+    check("the 'before' picture shows the Settings page in the old theme (Midnight background)",
+          (np.abs(before_img - np.array([int(ThemeManager.THEMES['Midnight']['background'][i:i + 2], 16)
+                                         for i in (1, 3, 5)])).sum(axis=2) < 6).mean() > 0.15)
+    def share(image, theme, token, region=slice(None)):
+        colour = np.array([int(ThemeManager.THEMES[theme][token][i:i + 2], 16) for i in (1, 3, 5)])
+        return (np.abs(image[:, region] - colour).sum(axis=2) < 3).mean()
+
+    sidebar_px = slice(0, int(overlay.size[0] * 0.15))
+    check("the 'after' picture is the Settings page in the new theme (Emerald background, sidebar with no Midnight left)",
+          share(after_img, "Emerald", "background") > 0.15 and share(after_img, "Midnight", "navbar", sidebar_px) == 0
+          and share(after_img, "Emerald", "navbar", sidebar_px) > 0.5,
+          f"{share(after_img, 'Emerald', 'background'):.2f} {share(after_img, 'Midnight', 'navbar', sidebar_px):.3f}")
+    pts = [(x, y) for x in range(120, overlay.size[0] - 60, 260) for y in range(160, overlay.size[1] - 160, 190)]
+    frame_a = own_pixels(overlay.top, pts)
     settle(0.4)
+    frame_b = own_pixels(overlay.top, pts) if manager.running else frame_a
+    check("frames change while it runs (the overlay's pixels differ from one moment to the next)",
+          frame_a != frame_b, f"{len(pts)} points")
+    end = time.time() + 4
+    while manager.running and time.time() < end:
+        settle(0.05)
+    check("it ends in the new theme", not manager.running and not overlays() and shown_theme_is(app, "Emerald"))
+
+    # Cancel brings the old theme back with the animation, and the page switch is part of it
     runs = manager.runs
-    dlg.preview_theme("Emerald")
-    check("a live preview animates", manager.runs == runs + 1 and manager.running)
-    check("the main window is covered by the effect; the dialog changes at once, on top of it",
-          len(manager._overlays) == 1 and manager._overlays[0].window is root, str([o.window for o in manager._overlays]))
-    check("the dialog is already in the new theme",
-          dlg.container.cget("fg_color").upper() == ThemeManager.THEMES["Emerald"]["background"].upper())
-    for overlay in manager._overlays:
-        window = overlay.window
-        check(f"overlay matches its window ({window.winfo_class()})",
-              overlay.size == (window.winfo_width(), window.winfo_height()))
-    settle(0.2)
-    runs = manager.runs
-    dlg.cancel()
+    page.cancel_button.invoke()
     settle(0.1)
     check("Cancel reverts the theme with an animation", manager.runs == runs + 1 and manager.running
           and ThemeManager.get_current_theme() == "Midnight")
+    check("... and the page it returns to is already showing under the effect", app._current_page == "generate")
     manager.finish()
 
-    dlg = SettingsDialog(app.header)
-    settle(0.4)
-    dlg.animate_var.set(False)
+    # leaving with changes and answering "Don't save": the old theme comes back with the animation too
+    import _test_dialogs as dialogs
+    app.sidebar.navigate("settings")
+    settle(0.3)
+    page.preview_theme("Ember")
+    manager.finish()
+    dialogs.answers["save_changes"] = "discard"
     runs = manager.runs
-    dlg.preview_theme("Ember")
-    check("the dialog's switch turns the animation off before Apply", manager.runs == runs and not manager.running
-          and ThemeManager.get_current_theme() == "Ember")
-    dlg.animate_var.set(True)
-    dlg.cancel()
+    app.sidebar.navigate("scan")
+    settle(0.1)
+    check("[Don't save] brings the old theme back with the animation", manager.runs == runs + 1 and manager.running
+          and ThemeManager.get_current_theme() == "Midnight" and app._current_page == "scan")
+    dialogs.answers.pop("save_changes")
     manager.finish()
-    check("closing the dialog clears the override", tt.ENABLED_OVERRIDE is None)
 
-    dlg = SettingsDialog(app.header)
-    settle(0.4)
-    check("the switch shows the saved value (on)", dlg.animate_var.get() is True)
-    check("opening unchanged is no change", not dlg.has_changes())
-    dlg.animate_var.set(False)
-    check("changing the switch counts as a change", dlg.has_changes())
-    check("Apply saves it", dlg.apply() is True and settings_store.get(tt.SETTING_KEY) is False)
-    settings_store.set(tt.SETTING_KEY, True)
+    # the "Save changes?" window opens on screen, over the app
+    from utils import window_guard
+    page.preview_theme("Graphite")
     manager.finish()
+    seen_box = {}
+
+    def look_at_box():
+        box = [w for w in root.winfo_children() if type(w).__name__ == "CTkToplevel"][-1]
+        seen_box["rect"] = (box.winfo_rootx(), box.winfo_rooty(), box.winfo_rootx() + box.winfo_width(),
+                            box.winfo_rooty() + box.winfo_height())
+        box.event_generate("<Escape>")
+
+    root.after(600, look_at_box)
+    dialogs.real_ask_save_changes(root)
+    areas = window_guard.work_areas()
+    rect = seen_box.get("rect")
+    centre = ((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2) if rect else (0, 0)
+    area = next((a for a in areas if a[0] <= centre[0] < a[2] and a[1] <= centre[1] < a[3]), None)
+    check("the 'Save changes?' window is fully on screen", area is not None and rect[0] >= area[0] and rect[1] >= area[1]
+          and rect[2] <= area[2] and rect[3] <= area[3], f"{rect} in {area}")
+    check("... and over the app window", rect is not None and root.winfo_rootx() <= centre[0] <= root.winfo_rootx() + root.winfo_width()
+          and root.winfo_rooty() <= centre[1] <= root.winfo_rooty() + root.winfo_height(), str(rect))
+    page.discard()
+    manager.finish()
+
+    # the switch decides at once, before it is applied
+    app.sidebar.navigate("settings")
+    settle(0.3)
+    page.animate_var.set(False)
+    runs = manager.runs
+    page.preview_theme("Ember")
+    check("the page's switch turns the animation off before Apply", manager.runs == runs and not manager.running
+          and ThemeManager.get_current_theme() == "Ember")
+    page.animate_var.set(True)
+    page.cancel()
+    manager.finish()
+    check("leaving the page clears the override", tt.ENABLED_OVERRIDE is None)
+    app.sidebar.navigate("settings")
+    settle(0.3)
+    check("the switch shows the saved value (on)", page.animate_var.get() is True)
+    check("opening unchanged is no change", not page.has_changes())
+    page.animate_var.set(False)
+    check("changing the switch counts as a change", page.has_changes())
+    check("Apply saves it", page.apply() is True and settings_store.get(tt.SETTING_KEY) is False)
+    settings_store.set(tt.SETTING_KEY, True)
+    page.cancel()
+    settle(0.3)
+    manager.finish()
+
+    # --- changes never overlap: one that arrives while another is being set up waits and runs next ---
+    ThemeManager.set_theme("Midnight", persist=False)
+    app.refresh_theme()
+    settle(0.3)
+    orig_init = tt._Overlay.__init__
+    state = {"n": 0}
+
+    def nested_init(self, *a, **k):
+        orig_init(self, *a, **k)
+        if state["n"] == 0:                                   # a second request arrives right here
+            state["n"] = 1
+            state["nested_result"] = app.change_theme("Ember")
+
+    tt._Overlay.__init__ = nested_init
+    try:
+        manager.run(lambda: (ThemeManager.set_theme("Emerald", persist=False), app.refresh_theme()))
+    finally:
+        tt._Overlay.__init__ = orig_init
+    settle(0.2)
+    log = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()
+    check("the request that arrived during set-up waits and then runs; the latest wins",
+          ThemeManager.get_current_theme() == "Ember" and manager.running and len(manager._overlays) == 1
+          and "it runs next" in log, f"{ThemeManager.get_current_theme()} running={manager.running}")
+    manager.finish()
+    check("no overlay is left without a renderer (the old 'NoneType' failure)", "NoneType" not in log, log[-400:])
+    check("the window shows one theme only", shown_theme_is(app, "Ember") and not stray_colours(app, "Ember"),
+          str(stray_colours(app, "Ember")[:3]))
+    # the same when the second request comes from inside the refresh itself
+    fired = {"n": 0}
+    orig_refresh = app.sidebar.refresh_theme
+
+    def refresh_then_ask():
+        orig_refresh()
+        if fired["n"] == 0:
+            fired["n"] = 1
+            app.change_theme("Daylight")
+
+    app.sidebar.refresh_theme = refresh_then_ask
+    try:
+        manager.run(lambda: (ThemeManager.set_theme("Aqua Mint", persist=False), app.refresh_theme()))
+        settle(0.3)
+    finally:
+        app.sidebar.refresh_theme = orig_refresh
+    manager.finish()
+    check("a change asked for from inside a refresh ends with the latest theme, complete",
+          ThemeManager.get_current_theme() == "Daylight" and shown_theme_is(app, "Daylight")
+          and not stray_colours(app, "Daylight"), str(stray_colours(app, "Daylight")[:3]))
+
+    # --- the log says what happened to every change ---
+    log_before = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()
+    manager.run(lambda: (ThemeManager.set_theme("Midnight", persist=False), app.refresh_theme()), duration=0.6)
+    end = time.time() + 3
+    while manager.running and time.time() < end:
+        settle(0.05)
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    settle(0.3)
+    root.event_generate("<ButtonPress-1>", x=40, y=40)
+    settle(0.1)
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
+    settle(0.3)
+    root.event_generate("<Key>", keysym="a")
+    settle(0.1)
+    manager.run(lambda: (ThemeManager.set_theme("Midnight", persist=False), app.refresh_theme()))
+    settle(0.3)
+    root.geometry("1200x760+20+20")
+    settle(0.3)
+    root.geometry("1280x800+20+20")
+    settle(0.3)
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
+    settle(0.3)
+    root.geometry("1280x800+60+50")
+    settle(0.3)
+    root.geometry("1280x800+20+20")
+    settle(0.3)
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    settle(0.3)
+    root.iconify()
+    settle(0.3)
+    root.deiconify()
+    settle(0.5)
+    manager.run(lambda: (ThemeManager.set_theme("Midnight", persist=False), app.refresh_theme()))
+    settle(0.2)
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
+    settle(0.2)
+    manager.finish("test")
+    settings_store.set(tt.SETTING_KEY, False)
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    settings_store.set(tt.SETTING_KEY, True)
+    tt.system_animations_enabled = lambda: False
+    manager.run(lambda: (ThemeManager.set_theme("Midnight", persist=False), app.refresh_theme()))
+    tt.system_animations_enabled = lambda: True
+    os.environ["QRSTUDIO_NO_THEME_ANIMATION"] = "1"
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
+    del os.environ["QRSTUDIO_NO_THEME_ANIMATION"]
+    log = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()[len(log_before):]
+    for expected in ("Theme transition started", "Theme transition finished", "skipped (click)", "skipped (key)",
+                     "skipped (resized)", "skipped (moved)", "skipped (minimized)", "skipped (new-change)",
+                     "not started (setting-off)", "not started (windows-animations-off)",
+                     "not started (disabled-by-environment)"):
+        check(f"the log records '{expected}'", expected in log, log[-600:])
+    check("every start is followed by a finish or a skip",
+          log.count("Theme transition started") == log.count("Theme transition finished") + log.count("skipped ("),
+          f"{log.count('Theme transition started')} started, {log.count('Theme transition finished')} finished, "
+          f"{log.count('skipped (')} skipped")
 
     # --- sizes at different scalings (the snapshot is in physical pixels; the overlay must match) ---
     for factor in (0.8, 1.0, 1.2):
@@ -535,4 +766,4 @@ if __name__ == "__main__":
             print(" -", p)
         sys.exit(1)
     print("THEME_TRANSITION_OK: mask maths, patch order, droplets, edge glow outside the union, snapshot, skip on click / key / "
-          "resize, restart, off switches, dialog, scalings, benchmark")
+          "move / resize / minimize / focus, changes never overlap, log reasons, off switches, Settings page, scalings, benchmark")

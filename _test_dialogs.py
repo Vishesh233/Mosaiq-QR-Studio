@@ -9,7 +9,7 @@ A message box or file dialog that really opens blocks the test until somebody cl
 
   * file dialogs answer "cancelled" (empty string) unless a test sets ``answers``
   * ``askyesno`` and friends answer "no" unless a test sets ``answers``
-  * the Settings dialog's "Save changes?" answers "cancel" unless ``answers["save_changes"]``
+  * the Settings page's "Save changes?" answers "cancel" unless ``answers["save_changes"]``
     is "save" or "discard"
   * every call is kept in ``calls`` as (kind, title, message)
 
@@ -29,6 +29,7 @@ from tkinter import filedialog, messagebox
 
 calls = []
 answers = {}
+real_ask_save_changes = None          # the app's real "Save changes?" window, for a test that drives it
 _expected = []
 
 _BOXES = ("showinfo", "showwarning", "showerror", "askyesno", "askokcancel",
@@ -103,15 +104,18 @@ def _without_taskbar_button():
 
 
 def _save_changes_question():
-    """The Settings dialog's own "Save changes?" window (not a tkinter message box)."""
-    from ui.dialogs import settings_dialog
+    """The app's own "Save changes?" window (not a tkinter message box)."""
+    from ui.dialogs import save_changes
+
+    global real_ask_save_changes
+    real_ask_save_changes = save_changes.ask_save_changes      # for the test of the real window
 
     def fake(parent):
         calls.append(("save_changes", "Save changes?", None))
         answer = answers.get("save_changes", "cancel")
         return answer(parent) if callable(answer) else answer
 
-    settings_dialog.ask_save_changes = fake
+    save_changes.ask_save_changes = fake
 
 
 def install():

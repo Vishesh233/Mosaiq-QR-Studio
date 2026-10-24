@@ -27,7 +27,6 @@ def main():
 
     from config import WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH
     from ui.app import QRCodeStudioApp
-    from ui.dialogs.settings_dialog import SettingsDialog
     from utils import history_store as h, qr_payloads
     from utils.qr_generator import QRGenerator
     from utils.qr_render import QRStyle
@@ -45,6 +44,13 @@ def main():
         while time.time() < end:
             root.update()
             time.sleep(0.01)
+
+    def open_settings():
+        """The Settings page, freshly opened (it shows what is saved)."""
+        app.show_generate_page()
+        app.show_settings_page()
+        settle()
+        return app.settings_page
 
     shown = []
     messagebox.showinfo = lambda *a, **k: shown.append(("info", a))
@@ -230,12 +236,11 @@ def main():
           and str(hp.delete_btn.cget("state")) == "disabled")
 
     # ---- Settings: switches and Clear history ----
-    dlg = SettingsDialog(app.header)
-    settle()
+    dlg = open_settings()
     check("settings show the history switches", dlg.history_var.get() is True and dlg.wifi_var.get() is False)
     check("saved count shown", f"{h.count()} saved" in dlg.history_count.cget("text"), dlg.history_count.cget("text"))
     dlg.history_var.set(False)
-    dlg.apply()
+    dlg.apply_and_close()
     settle()
     check("Apply switches history off", h.enabled() is False)
     count = h.count()
@@ -250,11 +255,10 @@ def main():
     check("the page tells it is off", "switched off" in hp.notice.cget("text"))
     check("old entries are still listed", len(hp._rows) > 0)
 
-    dlg = SettingsDialog(app.header)
-    settle()
+    dlg = open_settings()
     dlg.history_var.set(True)
     dlg.wifi_var.set(True)
-    dlg.apply()
+    dlg.apply_and_close()
     settle()
     check("Apply switches history and WiFi passwords on", h.enabled() and h.save_wifi_passwords())
     gp.clear_form()
@@ -265,14 +269,13 @@ def main():
     gp.generate_qr()
     kept = h.entries()[0]
     check("with the switch on the WiFi password is saved", PASSWORD in kept["text"] and h.thumbnail_path(kept))
-    dlg = SettingsDialog(app.header)
+    dlg = open_settings()
     dlg.wifi_var.set(False)
     dlg.cancel()
     settle()
     check("Cancel changes nothing", h.save_wifi_passwords() is True)
 
-    dlg = SettingsDialog(app.header)
-    settle()
+    dlg = open_settings()
     answers["yes"] = False
     count = h.count()
     dlg._clear_history()
@@ -310,7 +313,8 @@ def main():
 
     # ---- layout at the smallest window ----
     h.add_scanned("https://example.com/layout", "URL / Text", QRGenerator().generate("https://example.com/layout"))
-    hp.refresh()
+    app.show_history_page()
+    settle()
     hp.select(h.entries()[0]["id"])
     for width, height in ((WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT), (1280, 820)):
         root.geometry(f"{width}x{height}+-30000+-30000")

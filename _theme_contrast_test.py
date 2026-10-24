@@ -199,7 +199,6 @@ def check_widgets(problems):
 
     from ui.app import QRCodeStudioApp
     from ui.dialogs.color_picker import ColorPickerDialog
-    from ui.dialogs.settings_dialog import SettingsDialog
     from utils.theme_manager import ThemeManager
 
     import _test_dialogs
@@ -218,6 +217,7 @@ def check_widgets(problems):
             fn = getattr(app, f"show_{key}_page", None)
             if fn:
                 yield key, fn
+        yield "settings", app.show_settings_page
 
     def audit_all(theme_name, how):
         for label, show in pages():
@@ -225,6 +225,7 @@ def check_widgets(problems):
             root.update_idletasks()
             # Audit the whole window: sidebar, header and every page (hidden pages too).
             audit_tree(root, theme_name, f"{how}/{label}", problems)
+        app.settings_page.cancel()                 # back to where Settings was opened from
         app.show_generate_page()
 
     # 1. every theme as it would look after a fresh start is covered by the live path
@@ -242,15 +243,11 @@ def check_widgets(problems):
             ThemeManager.set_theme(first, persist=False)
             app.refresh_theme()
 
-    # Settings dialog (it holds theme tiles that deliberately show other themes' colours).
+    # The Settings page is audited with the other pages above (its theme tiles deliberately show other
+    # themes' colours and are skipped); here the dialogs that remain.
     for name in names:
         ThemeManager.set_theme(name, persist=False)
         app.refresh_theme()
-        dlg = SettingsDialog(app.header)
-        root.update_idletasks()
-        audit_tree(dlg, name, "settings", problems)
-        dlg.destroy()
-        root.update_idletasks()
         picker = ColorPickerDialog(app.header, "#0E7490", "audit")
         root.update_idletasks()
         audit_tree(picker, name, "colour picker", problems)

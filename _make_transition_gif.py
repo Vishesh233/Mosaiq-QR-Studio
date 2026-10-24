@@ -1,4 +1,5 @@
-"""Make docs/design/theme-transition.gif: the Midnight -> Aqua Mint blob transition.
+"""Make docs/design/theme-transition.gif: the Midnight -> Emerald blob transition, a click on a theme card of the
+Settings page (the whole window changes, the page included).
 
 Frames come only from snapshots of the app's own window (PrintWindow, see
 utils/theme_transition.capture_client) rendered with the same FrameRenderer the app uses. The window
@@ -34,9 +35,7 @@ def main():
     root = app.root
     root.geometry("1280x800+20+20")                           # on screen for a few seconds: Tk only paints visible windows
     root.update()
-    gp = app.generate_page
-    gp.content_card.url_entry.insert(0, "https://example.com/mosaiq")
-    gp.generate_qr()
+    app.show_settings_page()
     import time
     end = time.time() + 2.0
     while time.time() < end:
@@ -44,8 +43,7 @@ def main():
         time.sleep(0.02)
 
     before = tt.capture_client(root)
-    ThemeManager.set_theme("Aqua Mint", persist=False)
-    app.refresh_theme()
+    app.settings_page.preview_theme("Emerald")                # what a click on the card does (instant here: no animation)
     root.update_idletasks()
     end = time.time() + 0.5
     while time.time() < end:
@@ -54,6 +52,7 @@ def main():
     after = tt.capture_client(root)
     accent = ThemeManager.get_theme()["primary"]
     scaling = root._get_window_scaling()
+    app.settings_page.cancel()
     app.close()
 
     renderer = tt.FrameRenderer(before, after, accent, scaling=scaling)

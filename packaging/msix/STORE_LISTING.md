@@ -56,8 +56,8 @@ lowest rating (3+ / Everyone).
 > around a QR code on screen. History lists the codes generated and scanned on this PC (kept
 > locally; Settings has switches to turn it off, to save WiFi passwords, which is off by
 > default, and to clear it). Bulk Create loads a CSV file (a sample can be downloaded in the
-> app) and writes the codes to a folder. Settings is at the bottom of the sidebar; there the
-> theme can be changed and the intro turned off. On Windows N editions without the Media
+> app) and writes the codes to a folder. Settings is a page at the bottom of the sidebar (the
+> gear in the top bar opens it too); there the theme can be changed and the intro turned off. On Windows N editions without the Media
 > Feature Pack, Generate and the rest of the app work and the Scan tab explains that the Media
 > Feature Pack is needed.
 

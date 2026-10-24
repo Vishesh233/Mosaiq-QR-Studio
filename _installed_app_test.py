@@ -142,24 +142,19 @@ def small(image):
     return np.asarray(image.convert("RGB").resize((48, 30))).astype(int)
 
 
-def settings_window(main):
-    """The app's own Settings dialog (another program's window may also be called "Settings")."""
-    main_pid = win32process.GetWindowThreadProcessId(main)[1]
-    for handle, pid in all_windows_titled("Settings"):
-        if handle != main and pid == main_pid:
-            return handle
-    return None
-
-
-def all_windows_titled(title):
-    found = []
-
-    def collect(handle, _):
-        if win32gui.IsWindowVisible(handle) and win32gui.GetWindowText(handle) == title:
-            found.append((handle, win32process.GetWindowThreadProcessId(handle)[1]))
-
-    win32gui.EnumWindows(collect, None)
-    return found
+def find_tile(shot, theme):
+    """Where the theme card of ``theme`` is on the Settings page (physical px in the window's own picture):
+    its miniature is the only place that theme's background colour can be seen while another theme is active."""
+    import numpy as np
+    from utils.theme_manager import ThemeManager
+    value = ThemeManager.THEMES[theme]["background"]
+    r, g, b = (int(value[i:i + 2], 16) for i in (1, 3, 5))
+    pixels = np.asarray(shot.convert("RGB")).astype(int)
+    hit = (pixels[:, :, 0] == r) & (pixels[:, :, 1] == g) & (pixels[:, :, 2] == b)
+    if hit.sum() < 500:
+        return None
+    ys, xs = np.nonzero(hit)
+    return int(np.median(xs)), int(np.median(ys))
 
 
 def what_is_shown(main, pid):
@@ -177,28 +172,29 @@ def what_is_shown(main, pid):
 
 
 def theme_transition_check(hwnd, left, top, width, height):
-    """Open Settings, pick Emerald: what is shown must change frame by frame (the blob transition),
-    a click must skip to the final theme, and Cancel must go back (also animated)."""
+    """Open Settings (a page of the window), pick Emerald: what is shown must change frame by frame, over the
+    whole window (the blob transition), a click must skip to the final theme, and Cancel must go back
+    (also animated, to the page Settings was opened from)."""
     import numpy as np
 
     pid = win32process.GetWindowThreadProcessId(hwnd)[1]
     scale = ctypes.windll.user32.GetDpiForSystem() / 96.0
     before = what_is_shown(hwnd, pid)
-    click(left + width - 74, top + 102)                      # the gear button
-    dialog = None
+    click(left + 100 * scale, top + height - 35 * scale)     # Settings, the last entry of the sidebar
+    shot = None
+    tile = None
     end = time.time() + 10
-    while time.time() < end and not dialog:
-        dialog = settings_window(hwnd)
+    while time.time() < end and not tile:
+        shot = wc.capture_window(hwnd)
+        tile = find_tile(shot, "Emerald")
         pump(0.3)
-    check("Settings opens", bool(dialog))
-    if not dialog:
+    check("Settings opens as a page of the main window (the theme cards show)", bool(tile))
+    check("... and no second window opened", len([h for h, p in all_windows() if p == pid]) == 1)
+    if not tile:
         return
-    pump(1.0)
-    dl, dt, dr, db = win32gui.GetWindowRect(dialog)
-    dw = dr - dl
-    click(dl + dw * 580 / 968, dt + 495 * scale / 1.25)      # the Emerald tile (second row, third)
+    click(left + tile[0], top + tile[1])                     # the Emerald card
     samples = []
-    for _ in range(20):                                      # watch the main window's area for about 5 s
+    for _ in range(20):                                      # watch the window for about 5 s
         samples.append(what_is_shown(hwnd, pid))
         pump(0.1)
     moves = sum(1 for a, b in zip(samples, samples[1:]) if np.abs(a - b).mean() > 0.8)
@@ -210,8 +206,12 @@ def theme_transition_check(hwnd, left, top, width, height):
     check("... and the animation is over (no overlay window, picture is stable)",
           not intro_windows(hwnd, pid) and np.abs(what_is_shown(hwnd, pid) - final).mean() < 0.5)
 
-    # a click skips: pick another theme (Ember) and click inside the dialog while it animates
-    click(dl + dw * 365 / 968, dt + 495 * scale / 1.25)
+    # a click skips: pick another theme (Ember) and click anywhere in the window while it animates
+    tile = find_tile(wc.capture_window(hwnd), "Ember")
+    check("the Ember card is on the page", bool(tile))
+    if not tile:
+        return
+    click(left + tile[0], top + tile[1])
     started = time.time()
     mid = None
     while time.time() - started < 6 and mid is None:         # wait until the overlay is up
@@ -221,7 +221,7 @@ def theme_transition_check(hwnd, left, top, width, height):
     check("a second theme change shows the animation again", mid is not None)
     overlay_up = bool(intro_windows(hwnd, pid))
     if overlay_up:
-        click(dl + dw * 0.5, dt + 120 * scale / 1.25)        # a click on the dialog's heading skips
+        click(left + width * 0.55, top + 150 * scale)        # a click on the effect skips it
     pump(0.4)
     check("a click skips: the overlay is gone at once", not intro_windows(hwnd, pid))
     skipped = what_is_shown(hwnd, pid)
@@ -230,22 +230,15 @@ def theme_transition_check(hwnd, left, top, width, height):
     check("... and nothing changes afterwards", np.abs(skipped - settled).mean() < 0.5,
           f"{np.abs(skipped - settled).mean():.2f}")
 
-    # Cancel goes back to the starting theme
+    # Cancel goes back to the starting theme and to the page Settings was opened from
     for _attempt in range(3):                                # a click can be eaten while the focus moves
-        dl, dt, dr, db = win32gui.GetWindowRect(dialog)
-        click(dl + (dr - dl) * 847 / 968, db - 60 * scale / 1.25)    # Cancel in the footer
+        click(left + width - 92 * scale, top + height - 40 * scale)      # Cancel in the footer
         pump(1.5)
-        if not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog):
+        if not find_tile(wc.capture_window(hwnd), "Graphite") and not intro_windows(hwnd, pid):
             break
-    closed_at = time.time()
-    for _wait in range(80):                                  # a slow first start after a build can take many seconds
-        if not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog):
-            break
-        pump(0.25)
-    print(f"      (Cancel: dialog closed {time.time() - closed_at:.1f} s after the last click)")
     pump(3.0)
     after_cancel = what_is_shown(hwnd, pid)
-    check("Cancel closes the dialog", not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog))
+    check("Cancel leaves the Settings page", not find_tile(wc.capture_window(hwnd), "Graphite"))
     check("Cancel brings the starting theme back", np.abs(after_cancel - before).mean() < 4.0,
           f"{np.abs(after_cancel - before).mean():.2f}")
 

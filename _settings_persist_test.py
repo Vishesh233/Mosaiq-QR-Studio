@@ -1,5 +1,6 @@
-"""Settings persist: Apply writes everything, Cancel and "Don't save" write nothing, X asks, a failed
-write is reported, and the next launch starts with the saved theme.
+"""Settings persist: the Settings page's Apply writes everything, Cancel and "Don't save" write nothing,
+leaving the page or closing the app with changes asks, a failed write is reported, the next launch starts
+with the saved theme, and the Apply / Cancel footer is always visible (100 / 125 / 150 % scaling).
 
 Run:  .venv\\Scripts\\python.exe _settings_persist_test.py
 """
@@ -37,9 +38,8 @@ def main():
     import _test_dialogs
     dialogs = _test_dialogs.install()
 
+    import customtkinter as ctk
     from ui.app import QRCodeStudioApp
-    from ui.dialogs import settings_dialog
-    from ui.dialogs.settings_dialog import SettingsDialog, dialog_size
     from utils import history_store, settings_store
     from utils.theme_manager import ThemeManager
 
@@ -51,6 +51,7 @@ def main():
     root = app.root
     root.geometry("1280x820+-30000+-30000")
     root.update()
+    page = app.settings_page
 
     def settle(seconds=0.3):
         end = time.time() + seconds
@@ -58,10 +59,10 @@ def main():
             root.update()
             time.sleep(0.01)
 
-    def open_dialog():
-        dlg = SettingsDialog(app.header)
+    def open_page(from_page="generate"):
+        getattr(app, f"show_{from_page}_page")()
+        app.sidebar.navigate("settings")
         settle()
-        return dlg
 
     def on_disk():
         raw = read_file(path)
@@ -70,25 +71,49 @@ def main():
     def shown_theme():
         return app.sidebar._theme_name_label.cget("text")
 
+    def asked():
+        return len([c for c in dialogs.calls if c[0] == "save_changes"])
+
+    # ---- the page is part of the window, reached from the sidebar and the header ----
+    check("Settings is a page of the main window", page.winfo_toplevel() is root and "settings" in app._pages)
+    app.show_generate_page()
+    check("the sidebar has a Settings entry at the bottom with the other entries' style",
+          "settings" in app.sidebar._nav_buttons
+          and app.sidebar._nav_buttons["settings"].winfo_rooty() > app.sidebar._nav_buttons["bulk"].winfo_rooty())
+    app.sidebar.navigate("settings")
+    settle()
+    check("the sidebar entry opens the page", app._current_page == "settings" and page.winfo_ismapped())
+    check("... marks it selected like the other pages", app.sidebar.active_tab == "settings"
+          and app.sidebar._indicators["settings"].cget("fg_color").upper() == ThemeManager.get_theme()["primary"].upper())
+    check("... and sets the header", app.header._title_label.cget("text") == "Settings")
+    app.sidebar.navigate("history")
+    settle()
+    app.header.open_settings()
+    settle()
+    check("the header's gear opens the page too", app._current_page == "settings")
+    page.cancel()
+    settle()
+    check("Cancel returns to the page Settings was opened from", app._current_page == "history")
+
     # ---- a fresh install: defaults, nothing on disk ----
     from config import DEFAULT_THEME
     check("default theme at first start", ThemeManager.get_current_theme() == DEFAULT_THEME)
 
     # ---- Apply: live preview writes nothing; Apply writes everything in one go ----
-    dlg = open_dialog()
-    check("dialog opens unchanged", not dlg.has_changes())
-    dlg.preview_theme("Emerald")
+    open_page("generate")
+    check("page opens unchanged", not page.has_changes())
+    page.preview_theme("Emerald")
     settle()
     check("live preview shows the theme", shown_theme() == "Emerald" and ThemeManager.get_current_theme() == "Emerald")
     check("live preview writes nothing", not os.path.exists(path))
-    check("dialog knows it has changes", dlg.has_changes())
-    dlg.splash_var.set(False)
-    dlg.history_var.set(False)
-    dlg.wifi_var.set(True)
+    check("page knows it has changes", page.has_changes())
+    page.splash_var.set(False)
+    page.history_var.set(False)
+    page.wifi_var.set(True)
     check("still nothing written before Apply", not os.path.exists(path))
-    check("Apply reports success", dlg.apply() is True)
+    page.apply_button.invoke()
     settle()
-    check("dialog is closed after Apply", not dlg.winfo_exists())
+    check("Apply goes back to the page the user came from", app._current_page == "generate")
     saved = on_disk() or {}
     check("settings.json holds the theme", saved.get("theme") == "Emerald", str(saved))
     check("... the intro switch", saved.get("splash_enabled") is False, str(saved))
@@ -96,6 +121,7 @@ def main():
           and saved.get(history_store.KEY_WIFI_PASSWORDS) is True, str(saved))
     check("no temp file left behind", not os.path.exists(path + ".tmp"))
     check("the app keeps showing the applied theme", shown_theme() == "Emerald")
+    check("the page has no changes after Apply", not page.has_changes())
 
     # ---- the next launch: read the file again ----
     settings_store.reload()
@@ -108,8 +134,9 @@ def main():
             "from utils.theme_manager import ThemeManager\n"
             "app = QRCodeStudioApp(); root = app.root\n"
             "root.geometry('1100x700+-30000+-30000'); root.update(); time.sleep(0.3); root.update()\n"
+            "app.show_settings_page(); root.update()\n"
             "print('LAUNCH', ThemeManager.get_current_theme(), app.sidebar._theme_name_label.cget('text'), "
-            "root.cget('fg_color'), ThemeManager.get_theme()['background'])\n"
+            "root.cget('fg_color'), ThemeManager.get_theme()['background'], app.settings_page._selected)\n"
             "app.close()\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=90,
                          cwd=os.path.dirname(os.path.abspath(__file__)), env=dict(os.environ))
@@ -118,75 +145,119 @@ def main():
     check("a new process starts with the saved theme", parts[1:3] == ["Emerald", "Emerald"],
           f"{line!r} {out.stderr[-300:]!r}")
     check("... and its window uses that theme's colours",
-          len(parts) == 5 and parts[3].upper() == parts[4].upper() == ThemeManager.THEMES["Emerald"]["background"].upper(), line)
+          len(parts) == 6 and parts[3].upper() == parts[4].upper() == ThemeManager.THEMES["Emerald"]["background"].upper(), line)
+    check("... and its Settings page has that theme selected", len(parts) == 6 and parts[5] == "Emerald", line)
 
     # ---- Cancel: back to the opening state, file untouched ----
     before = read_file(path)
     mtime = os.path.getmtime(path)
-    dlg = open_dialog()
-    dlg.preview_theme("Ember")
-    dlg.splash_var.set(True)
+    open_page("scan")
+    page.preview_theme("Ember")
+    page.splash_var.set(True)
     settle()
     check("Cancel test: preview is showing", shown_theme() == "Ember")
-    dlg.cancel()
+    page.cancel_button.invoke()
     settle()
     check("Cancel reverts the theme", ThemeManager.get_current_theme() == "Emerald" and shown_theme() == "Emerald")
     check("Cancel writes nothing", read_file(path) == before and os.path.getmtime(path) == mtime)
-    check("Cancel closes the dialog", not dlg.winfo_exists())
-
-    # ---- X: no changes -> closes at once, no question ----
-    dialogs.clear()
-    dlg = open_dialog()
-    dlg.close_requested()
+    check("Cancel goes back to the page it came from", app._current_page == "scan")
+    open_page("scan")
+    check("reopening shows what is saved, not the cancelled choices",
+          page.splash_var.get() is False and page._selected == "Emerald" and not page.has_changes())
+    app.show_generate_page()
     settle()
-    check("X without changes closes at once", not dlg.winfo_exists())
-    check("... without asking", not [c for c in dialogs.calls if c[0] == "save_changes"])
+
+    # ---- leaving the page without changes: no question ----
+    dialogs.clear()
+    open_page("generate")
+    app.sidebar.navigate("scan")
+    settle()
+    check("leaving Settings without changes goes straight on", app._current_page == "scan" and asked() == 0)
     # a change that is changed back is no change
-    dlg = open_dialog()
-    dlg.preview_theme("Ember")
-    dlg.preview_theme("Emerald")
-    check("changing back leaves no changes", not dlg.has_changes())
-    dlg.close_requested()
+    open_page("generate")
+    page.preview_theme("Ember")
+    page.preview_theme("Emerald")
+    check("changing back leaves no changes", not page.has_changes())
+    app.sidebar.navigate("history")
     settle()
-    check("... and X closes without asking", not dlg.winfo_exists()
-          and not [c for c in dialogs.calls if c[0] == "save_changes"])
-    check("X without changes writes nothing", read_file(path) == before)
+    check("... and leaving asks nothing", app._current_page == "history" and asked() == 0)
+    check("leaving without changes writes nothing", read_file(path) == before)
 
-    # ---- X with changes: ask; Cancel stays, Don't save reverts, Save writes ----
+    # ---- leaving with changes: ask; Cancel stays, Don't save reverts, Save writes ----
     dialogs.clear()
-    dlg = open_dialog()
-    dlg.preview_theme("Ember")
+    open_page("generate")
+    page.preview_theme("Ember")
     settle()
     dialogs.answers["save_changes"] = "cancel"
-    dlg.close_requested()
+    app.sidebar.navigate("scan")
     settle()
-    check("X with changes asks 'Save changes?'", len([c for c in dialogs.calls if c[0] == "save_changes"]) == 1)
-    check("[Cancel] keeps the dialog open with the preview", dlg.winfo_exists() and shown_theme() == "Ember")
+    check("leaving with changes asks 'Save changes?'", asked() == 1)
+    check("[Cancel] stays on Settings with the preview", app._current_page == "settings" and shown_theme() == "Ember")
+    check("... the sidebar still marks Settings", app.sidebar.active_tab == "settings")
     check("... and writes nothing", read_file(path) == before)
     dialogs.answers["save_changes"] = "discard"
-    dlg.close_requested()
+    app.sidebar.navigate("scan")
     settle()
-    check("[Don't save] closes and reverts the theme", not dlg.winfo_exists()
+    check("[Don't save] goes to the page and brings the old theme back", app._current_page == "scan"
           and ThemeManager.get_current_theme() == "Emerald" and shown_theme() == "Emerald")
     check("... and writes nothing", read_file(path) == before and os.path.getmtime(path) == mtime)
 
-    dlg = open_dialog()
-    dlg.preview_theme("Ember")
-    dlg.splash_var.set(True)
+    open_page("generate")
+    page.preview_theme("Ember")
+    page.splash_var.set(True)
     dialogs.answers["save_changes"] = "save"
-    dlg.close_requested()
+    app.sidebar.navigate("bulk")
     settle()
     saved = on_disk() or {}
-    check("[Save] writes the theme and the switches and closes", not dlg.winfo_exists()
+    check("[Save] writes the theme and the switches and goes on", app._current_page == "bulk"
           and saved.get("theme") == "Ember" and saved.get("splash_enabled") is True, str(saved))
     check("... the app shows it", shown_theme() == "Ember")
     dialogs.answers.pop("save_changes")
 
+    # ---- closing the app with changes asks too ----
+    before = read_file(path)
+    open_page("generate")
+    page.preview_theme("Graphite")
+    dialogs.clear()
+    dialogs.answers["save_changes"] = "cancel"
+    app.close()
+    settle(0.2)
+    check("closing with changes asks", asked() == 1)
+    check("[Cancel] keeps the app open", root.winfo_exists() and app._current_page == "settings")
+    dialogs.answers.pop("save_changes")
+    page.discard()
+    settle()
+    page.cancel()
+    settle()
+
+    # ---- the real "Save changes?" window (the other checks use a stand-in) ----
+    box_seen = []
+
+    def press(label):
+        box = [w for w in root.winfo_children() if isinstance(w, ctk.CTkToplevel)][-1]
+        buttons = []
+        stack = list(box.winfo_children())
+        while stack:
+            widget = stack.pop()
+            stack.extend(widget.winfo_children())
+            if isinstance(widget, ctk.CTkButton):
+                buttons.append(widget)
+        box_seen.append(sorted(b.cget("text") for b in buttons))
+        next(b for b in buttons if b.cget("text") == label).invoke()
+
+    for label, expected in (("Save", "save"), ("Don't save", "discard"), ("Cancel", "cancel")):
+        root.after(500, lambda label=label: press(label))
+        check(f"the real window answers {expected} for [{label}]",
+              _test_dialogs.real_ask_save_changes(root) == expected)
+    check("the real window offers Save, Don't save and Cancel", box_seen[0] == ["Cancel", "Don't save", "Save"], str(box_seen))
+    root.after(500, lambda: [w for w in root.winfo_children() if isinstance(w, ctk.CTkToplevel)][-1].event_generate("<Escape>"))
+    check("Escape in the real window means Cancel", _test_dialogs.real_ask_save_changes(root) == "cancel")
+
     # ---- a failed write is shown, nothing is half-written, the choices stay ----
     before = read_file(path)
     real_replace = os.replace
-    dlg = open_dialog()
-    dlg.preview_theme("Graphite")
+    open_page("generate")
+    page.preview_theme("Graphite")
     settle()
 
     def broken_replace(src, dst, *a, **k):
@@ -194,7 +265,7 @@ def main():
 
     os.replace = broken_replace
     try:
-        result = dlg.apply()
+        result = page.apply()
     finally:
         os.replace = real_replace
     errors = [c for c in dialogs.calls if c[0] == "showerror" and "save settings" in (c[1] or "").lower()]
@@ -203,11 +274,12 @@ def main():
     dialogs.expect(*errors)
     check("the old file is untouched (atomic write)", read_file(path) == before)
     check("no temp file left after the failure", not os.path.exists(path + ".tmp"))
-    check("the dialog stays open", dlg.winfo_exists() and dlg.has_changes())
+    check("the page stays open with its changes", app._current_page == "settings" and page.has_changes())
     check("memory matches the disk after the failure", settings_store.get("theme") == "Ember")
-    check("Apply works once the problem is gone", dlg.apply() is True)
-    check("... and the file has the theme", (on_disk() or {}).get("theme") == "Graphite")
+    page.apply_button.invoke()
     settle()
+    check("Apply works once the problem is gone", (on_disk() or {}).get("theme") == "Graphite"
+          and app._current_page == "generate")
 
     # ---- settings_store itself ----
     real_replace = os.replace
@@ -238,45 +310,50 @@ def main():
     settings_store.reload()
     check("the next write repairs it", (on_disk() or {}).get("theme") == "Graphite")
 
-    # ---- the dialog is put on screen, whatever Windows would have cascaded it to ----
-    from ui.dialogs.settings_dialog import dialog_position
+    # ---- the footer: Apply and Cancel are always visible, at 100 / 125 / 150 % ----
+    from utils import window_guard
+    labels = sorted(b.cget("text") for b in page.footer.winfo_children())
+    check("footer has Cancel and Apply", labels == ["Apply", "Cancel"], str(labels))
+    theme = ThemeManager.get_theme()
+    check("Apply is the accent button", page.apply_button.cget("fg_color").upper() == theme["primary"].upper())
+    for scaling in (1.0, 1.25, 1.5):
+        ctk.set_widget_scaling(scaling)
+        ctk.set_window_scaling(scaling)
+        for width, height in ((1280, 820), (1080, 680)):         # the start size and the smallest size
+            root.geometry(f"{width}x{height}+-30000+-30000")
+            open_page("generate")
+            settle(0.4)
+            for scroll in (0.0, 1.0):                             # the page scrolled to the top and to the end
+                page.body._parent_canvas.yview_moveto(scroll)
+                settle(0.15)
+                bottom = root.winfo_rooty() + root.winfo_height()
+                check(f"footer buttons visible at {int(scaling * 100)} %, {width}x{height}, scrolled to {scroll}",
+                      page.footer.winfo_ismapped() and all(
+                          b.winfo_ismapped() and b.winfo_rooty() >= root.winfo_rooty()
+                          and b.winfo_rooty() + b.winfo_height() <= bottom for b in page.footer.winfo_children()),
+                      f"bottom {bottom}, footer {page.footer.winfo_rooty() + page.footer.winfo_height()}")
+            check(f"the body scrolls above the footer at {int(scaling * 100)} %, {width}x{height}",
+                  page.body.winfo_rooty() + page.body.winfo_height() <= page.footer.winfo_rooty() + 2)
+            page.cancel()
+            settle(0.2)
+    ctk.set_widget_scaling(1.0)
+    ctk.set_window_scaling(1.0)
+
+    # ---- the dialog-placement helper still used by the "Save changes?" prompt ----
     area = (0, 0, 1920, 1160)
     for parent in ((0, 0, 1920, 1160), (-9, -9, 1929, 1149), (300, 200, 1500, 900), (1500, 800, 3000, 1500)):
         for size in ((950, 1085), (950, 700), (1200, 400)):
-            at = dialog_position(parent, [area], size)
-            if parent[0] >= area[2] or at is None:
+            at = window_guard.centred_over(parent, [area], size)
+            if at is None:
                 continue
-            check(f"dialog {size} for parent {parent} sits inside the work area",
+            check(f"window {size} for parent {parent} sits inside the work area",
                   at[0] >= area[0] and at[1] >= area[1] and at[0] + size[0] <= area[2] and at[1] + size[1] <= area[3], str(at))
     check("a parent on no monitor gives no position (the system decides)",
-          dialog_position((-30000, -30000, -28700, -29200), [area], (950, 1085)) is None)
-    check("a dialog is centred over a parent that has room", dialog_position((200, 100, 1000, 700), [area], (400, 300)) == (400, 250))
-    check("with two monitors the dialog stays on the parent's monitor",
-          dialog_position((-1900, 150, -100, 1100), [(0, 0, 1920, 1160), (-1920, 113, 0, 1193)], (950, 1000))[0] < 0)
-
-    # ---- the footer: Apply and Cancel are always visible ----
-    for screen_w, screen_h, scaling in ((1920, 1200, 1.25), (1920, 1080, 1.5), (1366, 768, 1.0),
-                                        (1366, 768, 1.25), (1280, 720, 1.5), (3840, 2160, 1.5)):
-        w, h = dialog_size(screen_w, screen_h, scaling)
-        check(f"dialog fits a {screen_w}x{screen_h} screen at {int(scaling * 100)}%",
-              w * scaling <= screen_w and h * scaling <= screen_h - 40, f"{w}x{h} logical")
-    dlg = open_dialog()
-    for height_px in (1200, 900, 768, 600):
-        w, h = dialog_size(1920, height_px, dlg._get_window_scaling())
-        dlg.geometry(f"{w}x{h}")
-        settle(0.3)
-        bottom = dlg.winfo_rooty() + dlg.winfo_height()
-        buttons = [b for b in dlg.footer.winfo_children()]
-        check(f"footer buttons visible when the dialog is {h} px tall",
-              dlg.footer.winfo_ismapped() and all(b.winfo_ismapped() and b.winfo_rooty() + b.winfo_height() <= bottom
-                                                  for b in buttons), f"bottom {bottom}")
-    labels = sorted(b.cget("text") for b in dlg.footer.winfo_children())
-    check("footer has Cancel and Apply", labels == ["Apply", "Cancel"], str(labels))
-    theme = ThemeManager.get_theme()
-    apply_button = next(b for b in dlg.footer.winfo_children() if b.cget("text") == "Apply")
-    check("Apply is the accent button", apply_button.cget("fg_color").upper() == theme["primary"].upper())
-    dlg.cancel()
-    settle()
+          window_guard.centred_over((-30000, -30000, -28700, -29200), [area], (950, 1085)) is None)
+    check("a window is centred over a parent that has room",
+          window_guard.centred_over((200, 100, 1000, 700), [area], (400, 300)) == (400, 250))
+    check("with two monitors the window stays on the parent's monitor",
+          window_guard.centred_over((-1900, 150, -100, 1100), [(0, 0, 1920, 1160), (-1920, 113, 0, 1193)], (950, 1000))[0] < 0)
 
     app.close()
 
@@ -288,5 +365,6 @@ if __name__ == "__main__":
         for p in problems:
             print(" -", p)
         sys.exit(1)
-    print("SETTINGS_PERSIST_OK: Apply writes all settings atomically, Cancel / Don't save write nothing, X asks, "
-          "failed writes are reported, the next launch uses the saved theme, footer always visible")
+    print("SETTINGS_PERSIST_OK: Settings page: Apply writes all settings atomically, Cancel / Don't save write nothing, "
+          "leaving or closing with changes asks, failed writes are reported, the next launch uses the saved theme, "
+          "footer always visible at 100 / 125 / 150 %")

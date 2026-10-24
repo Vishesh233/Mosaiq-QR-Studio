@@ -35,14 +35,14 @@ def main():
     import _test_dialogs
     _test_dialogs.install()
     from ui.app import QRCodeStudioApp
-    from ui.dialogs.settings_dialog import SettingsDialog
 
     app = QRCodeStudioApp()
     root = app.root
     root.geometry("1280x820+-30000+-30000")
     root.update()
-    dialog = SettingsDialog(app.header)
+    app.show_settings_page()
     root.update()
+    dialog = app.settings_page
     check("Settings shows the intro animation switch ON", dialog.splash_var.get() is True)
     check("history is on", dialog.history_var.get() is True)
     check("WiFi passwords in history are off", dialog.wifi_var.get() is False)

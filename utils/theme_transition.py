@@ -28,6 +28,13 @@ making the animation longer).
 
 It does not run at start-up, when "Animate theme changes" is off, when Windows' "Animation effects"
 are off, or when no snapshot can be taken (that is logged as a warning and the theme is applied at once).
+
+Every change is written to mosaiq.log with its outcome: "started", then "finished" or "skipped (reason)"
+(click, key, moved, resized, minimized, focus-lost, new-change, safety-timer, window-closed, worker-error),
+or "not started (reason)" (setting-off, windows-animations-off, disabled-by-environment, snapshot-failed).
+
+Changes never overlap: a change that arrives while another one is still being set up waits and is applied
+right after it (the latest one wins), so the application never shows a mix of two themes.
 """
 import ctypes
 import math
@@ -74,7 +81,7 @@ CONFIG = {
     "fps": 60,
 }
 
-ENABLED_OVERRIDE = None                  # the Settings dialog sets this while its switch is being changed
+ENABLED_OVERRIDE = None                  # the Settings page sets this while its switch is being changed
 ENV_DISABLE = "QRSTUDIO_NO_THEME_ANIMATION"
 SETTING_KEY = "animate_theme_changes"
 
@@ -88,6 +95,7 @@ WS_EX_APPWINDOW = 0x00040000
 WS_EX_NOACTIVATE = 0x08000000
 SWP_FLAGS = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020      # NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED
 SAFETY_EXTRA_SEC = 1.0                   # the overlay is destroyed at most this long after DURATION_SEC, whatever happens
+FOCUS_GRACE_SEC = 0.3                    # focus changes in the first 300 ms never end the effect (windows settle then)
 
 
 def make_tool_window(window):
@@ -410,12 +418,36 @@ def capture_client(window):
     return image
 
 
+def disabled_reason():
+    """Why a theme change is not animated right now, or None when it is."""
+    if os.environ.get(ENV_DISABLE, "").strip().lower() in ("1", "true", "yes"):
+        return "disabled-by-environment"
+    wanted = ENABLED_OVERRIDE if ENABLED_OVERRIDE is not None else bool(settings_store.get(SETTING_KEY, True))
+    if not wanted:
+        return "setting-off"
+    if not system_animations_enabled():
+        return "windows-animations-off"
+    return None
+
+
 def enabled():
     """Should a theme change be animated right now?"""
-    if os.environ.get(ENV_DISABLE, "").strip().lower() in ("1", "true", "yes"):
+    return disabled_reason() is None
+
+
+def another_program_has_focus():
+    """True when the foreground window belongs to another program (the user really went elsewhere).
+    A moment without any foreground window (windows being activated) does not count."""
+    if not sys.platform.startswith("win"):
         return False
-    wanted = ENABLED_OVERRIDE if ENABLED_OVERRIDE is not None else bool(settings_store.get(SETTING_KEY, True))
-    return wanted and system_animations_enabled()
+    user32 = ctypes.windll.user32
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    handle = user32.GetForegroundWindow()
+    if not handle:
+        return False
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(handle, ctypes.byref(pid))
+    return pid.value != os.getpid()
 
 
 # ------------------------------------------------------------------ the animation on screen
@@ -498,16 +530,19 @@ class _Overlay:
         self.producer = None
         self.shown_T = -1.0
         self.bindings = []
-        self.top.update()                            # on screen now
+        self.top.update()                            # on screen now (a change asked for meanwhile waits: see run)
         self.where = self._where()
 
     def _where(self):
         return (self.window.winfo_rootx(), self.window.winfo_rooty(),
                 self.window.winfo_width(), self.window.winfo_height())
 
-    def moved(self):
-        """Did the covered window move or change size?"""
-        return self._where() != self.where
+    def changed(self):
+        """"moved" or "resized" when the covered window is no longer where it was, else None."""
+        now = self._where()
+        if now == self.where:
+            return None
+        return "resized" if now[2:] != self.where[2:] else "moved"
 
     def show(self, image):
         self.photo.paste(image)
@@ -536,7 +571,10 @@ class ThemeTransition:
         self._overlays = []
         self._job = None
         self._safety_job = None
-        self._started = 0.0
+        self._setting_up = False        # run() is busy: a change that arrives now waits (see run)
+        self._queued = None
+        self._began = 0.0               # when the overlay went up
+        self._started = 0.0             # when the animation started (0 while it is being set up)
         self._quality = 1.0
         self._frame_times = []          # the last few frames (decides the resolution)
         self._all_times = []            # every frame of this animation (for the statistics)
@@ -552,33 +590,55 @@ class ThemeTransition:
 
     # ---- public ----
     def run(self, change, duration=DURATION_SEC):
-        """Apply ``change`` with the transition. Returns True when an animation started."""
-        self.finish()                                # an earlier animation jumps to its end first
-        if not enabled():
+        """Apply ``change`` with the transition. Returns True when an animation started.
+
+        Changes never overlap: while one is being set up (an event handled in the meantime may ask for
+        another change), the new one waits and runs right after, so only the latest request is shown
+        and the application never holds a mix of two themes."""
+        if self._setting_up:
+            self._queued = (change, duration)
+            get_logger().info("Theme transition: a change arrived while another was being set up; it runs next")
+            return False
+        self._setting_up = True
+        try:
+            started = self._run(change, duration)
+        finally:
+            self._setting_up = False
+        queued, self._queued = self._queued, None
+        if queued is not None:
+            return self.run(*queued)
+        return started
+
+    def _run(self, change, duration):
+        self.finish("new-change")                    # an earlier animation jumps to its end first
+        reason = disabled_reason()
+        if reason is not None:
+            get_logger().info("Theme transition not started (%s)", reason)
             change()
             return False
         windows = [w for w in self._windows() if w is not None and w.winfo_exists()]
         try:
             before = [capture_client(w) for w in windows]
         except SnapshotError as e:
-            get_logger().warning("Theme transition skipped (no snapshot of the window): %s", e)
+            get_logger().warning("Theme transition not started (snapshot-failed: no snapshot of the window): %s", e)
             change()
             return False
         # The old picture goes up now, so the window does not look frozen while the change is applied.
+        self._began = time.perf_counter()
+        self._started = 0.0
         for window, old in zip(windows, before):
             overlay = _Overlay(window, old)
             self._overlays.append(overlay)
             self._hook_skip(overlay)
-        self._raise_dialogs()
         try:
             change()
             after = [capture_client(w) for w in windows]
         except SnapshotError as e:
-            get_logger().warning("Theme transition skipped (no snapshot after the change): %s", e)
-            self.finish()
+            get_logger().warning("Theme transition not started (snapshot-failed: no snapshot after the change): %s", e)
+            self.finish("snapshot-failed")
             return False
         except Exception:
-            self.finish()                            # never leave the old picture over the window
+            self.finish("error-in-change")           # never leave the old picture over the window
             raise
         return self.start(before, after, duration)
 
@@ -606,6 +666,8 @@ class ThemeTransition:
         # Safety net, independent of the frame loop and of the workers: whatever goes wrong, the
         # overlay is gone DURATION_SEC + 1 s after the start.
         self._safety_job = self.root.after(int((duration + SAFETY_EXTRA_SEC) * 1000), self._safety)
+        get_logger().info("Theme transition started (%.1f s, %d window(s), %dx%d)", duration,
+                          len(self._overlays), *self._overlays[0].size)
         self._tick()
         return True
 
@@ -614,10 +676,20 @@ class ThemeTransition:
         if self._overlays:
             get_logger().warning("Theme transition was still showing %.1f s after its start; it was ended.",
                                  time.perf_counter() - self._started)
-            self.finish()
+            self.finish("safety-timer")
 
-    def finish(self):
-        """Jump to the final state now (the new theme is already applied underneath)."""
+    def finish(self, reason="finished"):
+        """Jump to the final state now (the new theme is already applied underneath). ``reason`` is
+        what ended it: "finished" at the natural end, otherwise why it was skipped (it goes to the log)."""
+        if self._overlays:
+            if reason == "finished":
+                get_logger().info("Theme transition finished (%d frames, %.0f ms on average)", self._frames,
+                                  sum(self._all_times) / len(self._all_times) if self._all_times else 0.0)
+            elif self._started:
+                get_logger().info("Theme transition skipped (%s) %.2f s into the animation", reason,
+                                  time.perf_counter() - self._started)
+            else:
+                get_logger().info("Theme transition skipped (%s) while it was being set up", reason)
         if self._job is not None:
             self.root.after_cancel(self._job)
             self._job = None
@@ -639,50 +711,43 @@ class ThemeTransition:
         self._overlays = []
 
     # ---- internals ----
-    def _toplevels(self):
-        """The application's other windows that are showing (a Settings dialog ...)."""
-        import customtkinter as ctk
-        found, stack = [], list(self.root.winfo_children())
-        while stack:
-            widget = stack.pop()
-            if isinstance(widget, ctk.CTkToplevel) and widget.winfo_viewable():
-                found.append(widget)
-            stack.extend(widget.winfo_children())
-        return found
-
-    def _raise_dialogs(self):
-        """A dialog stays on top of the effect (it changes theme at once)."""
-        for dialog in self._toplevels():
-            dialog.lift()
-
     def _hook_skip(self, overlay):
-        """A click on the overlay or a key skips at once. Clicks and keys anywhere else in the app (a
-        Settings dialog, the window itself) and moving or resizing the window skip too, but those are
-        attached a moment later: the click that started this transition is still being delivered and
-        must not end it."""
-        skip = lambda _event=None: self.finish()
-        overlay.top.bind("<Button>", skip)
-        overlay.top.bind("<Key>", skip)
-        self.root.after(80, lambda: self._attach_skip(overlay, skip))
+        """A click on the overlay or a key skips at once. Clicks and keys anywhere else in the window and
+        moving or resizing it skip too, but those are attached a moment later: the click that started
+        this transition is still being delivered and must not end it."""
+        overlay.top.bind("<Button>", lambda _event=None: self.finish("click"))
+        overlay.top.bind("<Key>", lambda _event=None: self.finish("key"))
+        self.root.after(80, lambda: self._attach_skip(overlay))
 
-    def _attach_skip(self, overlay, skip):
+    def _attach_skip(self, overlay):
         if overlay not in self._overlays or not overlay.alive():
             return
-        for widget in [overlay.window] + self._toplevels():
-            for sequence in ("<Key>", "<Button>"):
-                overlay.bindings.append((widget, sequence, widget.bind(sequence, skip, add="+")))
-        funcid = overlay.window.bind("<Configure>", lambda _e: overlay.moved() and self.finish(), add="+")
-        overlay.bindings.append((overlay.window, "<Configure>", funcid))
-        funcid = overlay.window.bind("<Unmap>", lambda e: e.widget is overlay.window and self.finish(), add="+")
-        overlay.bindings.append((overlay.window, "<Unmap>", funcid))             # minimized or hidden
-        funcid = overlay.window.bind("<FocusOut>", lambda e: self.root.after(60, self._focus_check), add="+")
-        overlay.bindings.append((overlay.window, "<FocusOut>", funcid))          # another program took over
+        window = overlay.window
+
+        def bind(sequence, handler):
+            overlay.bindings.append((window, sequence, window.bind(sequence, handler, add="+")))
+
+        bind("<Key>", lambda _e: self.finish("key"))
+        bind("<Button>", lambda _e: self.finish("click"))
+        bind("<Configure>", lambda e: e.widget is window and self._window_changed(overlay))
+        bind("<Unmap>", lambda e: e.widget is window and self.finish("minimized"))      # minimized or hidden
+        bind("<FocusOut>", lambda e: e.widget is window and self._focus_out())
+
+    def _window_changed(self, overlay):
+        reason = overlay.changed()
+        if reason is not None:
+            self.finish(reason)
+
+    def _focus_out(self):
+        """The window lost the focus. Not in the first FOCUS_GRACE_SEC of the animation (windows settle
+        then); later it is looked at once the focus has settled."""
+        if self._started and time.perf_counter() - self._started >= FOCUS_GRACE_SEC:
+            self.root.after(60, self._focus_check)
 
     def _focus_check(self):
-        """The focus left the window: it is fine when it went to one of our own windows (a dialog),
-        otherwise the user switched to another program and the effect ends."""
-        if self._overlays and self.root.focus_displayof() is None:
-            self.finish()
+        """That ends the effect only when the user really went to another program."""
+        if self._overlays and self.root.focus_displayof() is None and another_program_has_focus():
+            self.finish("focus-lost")
 
     def _tick(self):
         """Show the newest finished frame of every overlay; ends the animation on time."""
@@ -700,7 +765,10 @@ class ThemeTransition:
         failed = next((o.producer.error for o in self._overlays if o.producer and o.producer.error), None)
         if failed is not None:
             get_logger().error("Theme transition stopped: %s", failed, exc_info=failed)
-        if T >= 1.0 or not self._overlays or failed is not None:
+        if failed is not None or not self._overlays:
+            self.finish("worker-error" if failed is not None else "window-closed")
+            return
+        if T >= 1.0:
             self.finish()
             return
         shown = False

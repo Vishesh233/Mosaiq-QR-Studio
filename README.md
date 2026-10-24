@@ -37,8 +37,8 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
 - Eight themes with live preview: Midnight, Graphite, AMOLED, Aqua Mint, Ultraviolet, Ember, Emerald and the light Daylight
-- A **liquid ink transition** (three blobs, droplets, a glowing edge; 2 s, click or key skips it) plays when the theme changes in Settings. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
-- Settings has an Apply / Cancel footer: themes preview live, **Apply** saves everything, **Cancel** goes back, and closing with X asks whether to save; the saved theme is used on the next start
+- A **liquid ink transition** (three blobs, droplets, a glowing edge; 2 s, click or key skips it) plays over the whole window (the Settings page included) when the theme changes. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
+- **Settings is a page of the main window** (the last entry of the sidebar, or the gear in the header), so the transition covers all of it. Themes preview live, the Apply / Cancel footer is always visible, **Apply** saves everything, **Cancel** goes back, and leaving the page or closing the app with unsaved changes asks *Save changes?*; the saved theme is used on the next start. Every theme change is noted in `mosaiq.log` (started, finished, or why it was skipped)
 - Works fully offline; nothing is collected or sent ([privacy policy](PRIVACY.md))
 
 ## Screenshots
@@ -82,8 +82,9 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_history_test.py`, `_history_ui_test.py` | the history store and the History page, WiFi privacy (every saved preview is decoded to prove no password), Settings switches |
 | `_bulk_test.py`, `_bulk_ui_test.py` | CSV reading and per-row errors, the 1000-row limit, file names, the worker, Cancel, formats, progress without a frozen window |
 | `_theme_contrast_test.py` | contrast of every theme and every widget, live theme switching |
-| `_theme_transition_test.py` | the liquid blob theme transition: mask maths and patch order, snapshot of the app window only, skip on click / key / resize, restart, off switches, frame-time benchmark |
-| `_settings_persist_test.py` | Settings: Apply writes every setting atomically, Cancel and "Don't save" write nothing, X asks "Save changes?", a failed write is reported, the next launch uses the saved theme, the footer is always visible |
+| `_theme_transition_test.py` | the liquid blob theme transition: mask maths and patch order, snapshot of the app window only, the Settings page (a click on a theme card animates the whole window), skip on click / key / move / resize / minimize / focus loss, changes never overlap, the log reason of every start and skip, off switches, frame-time benchmark |
+| `_theme_leak_test.py` | theme leak audit: ~50 switch sequences (animation on and off, skipped, interrupted, quick, from the Settings page) on every page; no widget and no painted area may keep a colour of another theme |
+| `_settings_persist_test.py` | the Settings page: Apply writes every setting atomically, Cancel and "Don't save" write nothing, leaving the page or closing the app with changes asks "Save changes?", a failed write is reported, the next launch uses the saved theme, the footer is always visible at 100 / 125 / 150 % |
 | `_status_dot_test.py` | the card status dot (dim, then bright with a glow once there is a result) on every page, the fade, and the sidebar's theme dot in every theme |
 | `_defaults_test.py` | a fresh install: intro animation on, history on, WiFi passwords off |
 | `_window_visible_test.py` | the window is on a monitor after start-up, even from an off-screen position |
@@ -113,7 +114,7 @@ Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCo
 ```
 Mosaiq-QR-Studio/
 ├── main.py, config.py
-├── ui/                  # app shell, pages, components, settings dialog
+├── ui/                  # app shell, pages (incl. Settings), components, dialogs
 │   ├── pages/           # Generate, Scan, History, Bulk Create
 │   ├── splash.py        # animated intro (NumPy renderer)
 │   └── brand_logo.py    # logo and app icon, drawn in code

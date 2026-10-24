@@ -7,6 +7,8 @@ from ui.pages.generate_page import GeneratePage
 from ui.pages.scan_page import ScanPage
 from ui.pages.history_page import HistoryPage
 from ui.pages.bulk_page import BulkPage
+from ui.pages.settings_page import SettingsPage
+from ui.dialogs import save_changes
 from ui.splash import Splash, splash_disabled
 from ui.brand_logo import apply_window_icon
 from ui.dnd_support import create_root
@@ -27,9 +29,8 @@ from utils.theme_manager import ThemeManager
 class QRCodeStudioApp:
     """Application shell: fixed left sidebar + top bar + scrollable workspace.
 
-    Behaviour is unchanged from v2: two pages (Generate / Scan), the same
-    generator/scanner integration, and the same theme refresh propagation.
-    Only the surrounding layout is redesigned.
+    Pages: Generate, Scan, History, Bulk Create and Settings (a page in this window, so the
+    theme transition covers all of it). Theme changes go through ``change_theme``.
     """
 
     # Per-screen top bar copy (kept next to routing for a single source).
@@ -49,6 +50,10 @@ class QRCodeStudioApp:
         "bulk": (
             "Bulk Create",
             "Make many QR codes at once from a CSV file.",
+        ),
+        "settings": (
+            "Settings",
+            "Personalise how Mosaiq looks. Themes preview instantly.",
         ),
     }
 
@@ -127,11 +132,16 @@ class QRCodeStudioApp:
                                         on_regenerate=self.regenerate_history_entry)
 
         self.bulk_page = BulkPage(self.body, style_provider=self._generate_look)
+        self.settings_page = SettingsPage(self.body, app=self)
 
         self._pages = {"generate": self.generate_page, "scan": self.scan_page,
-                       "history": self.history_page, "bulk": self.bulk_page}
+                       "history": self.history_page, "bulk": self.bulk_page,
+                       "settings": self.settings_page}
         self._current_page = None
-        self._show_page("generate")
+        self._refreshing = False
+        self._refresh_again = False
+        self._settings_return = "generate"      # where Apply / Cancel go back to
+        self._switch_page("generate")
 
         # ==========================
         # Navigation wiring
@@ -141,6 +151,7 @@ class QRCodeStudioApp:
         self.sidebar.add_nav_item("scan", "Scan QR", "scan", self.show_scan_page)
         self.sidebar.add_nav_item("history", "History", "history", self.show_history_page)
         self.sidebar.add_nav_item("bulk", "Bulk Create", "bulk", self.show_bulk_page)
+        self.sidebar.add_nav_item("settings", "Settings", "settings", self.show_settings_page, bottom=True)
 
         # Closing the window must release the camera before the app exits.
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -148,6 +159,11 @@ class QRCodeStudioApp:
     # ==================================================
 
     def close(self):
+        if self._current_page == "settings" and self.settings_page.has_changes():
+            choice = save_changes.ask_save_changes(self.root)
+            if choice == "cancel" or (choice == "save" and not self.settings_page.apply()):
+                return                      # stay (a failed save has shown its error)
+            # "Don't save": nothing was written, and the window is closing anyway.
         self.scan_page.shutdown()
         self.bulk_page.shutdown()
         self.root.destroy()
@@ -159,9 +175,28 @@ class QRCodeStudioApp:
         self.header.set_title(title, subtitle)
 
     def _show_page(self, key):
+        """Go to a page. Leaving Settings with unsaved changes asks "Save changes?" first."""
+        if self._current_page == "settings" and key != "settings" and self.settings_page.has_changes():
+            self._leave_settings(key)
+            return
+        self._switch_page(key)
+
+    def _leave_settings(self, key):
+        choice = save_changes.ask_save_changes(self.root)
+        if choice == "save" and self.settings_page.apply():
+            self._switch_page(key)
+        elif choice == "discard":
+            # The old theme comes back with the transition, and the page switch is part of that change.
+            self.settings_page.discard(then=lambda: self._switch_page(key))
+        else:                               # Cancel (or a failed save, which has shown its error): stay
+            self.sidebar.set_active("settings")
+
+    def _switch_page(self, key):
         """Show one page (and its title); leaving Scan always releases the camera."""
         if self._current_page == "scan" and key != "scan":
             self.scan_page.on_hide()
+        if self._current_page == "settings" and key != "settings":
+            self.settings_page.unload()
         for name, page in self._pages.items():
             if name != key:
                 page.pack_forget()
@@ -184,6 +219,16 @@ class QRCodeStudioApp:
         """The style and logo chosen on the Generate page (Bulk Create uses them)."""
         gp = self.generate_page
         return gp.current_style(), gp.logo_card.get_logo_path()
+
+    def show_settings_page(self):
+        if self._current_page != "settings":
+            self._settings_return = self._current_page
+            self.settings_page.load()
+        self._show_page("settings")
+
+    def close_settings(self):
+        """Back to the page Settings was opened from (after Apply or Cancel)."""
+        self._show_page(self._settings_return)
 
     def show_history_page(self):
         self.history_page.refresh()
@@ -211,13 +256,12 @@ class QRCodeStudioApp:
         traceback.print_exception(exc_type, exc, tb)
 
     def _transition_windows(self):
-        """The windows the transition covers: the main window. A Settings dialog changes theme at
-        once (a second full-size animation would slow both down); it stays on top of the effect."""
+        """The window the transition covers: the main window, Settings page included."""
         return [self.root]
 
     def change_theme(self, name, also=None):
         """Switch to theme ``name`` live (nothing is saved) with the blob transition. ``also`` is
-        called as part of the change (a dialog restyles itself there)."""
+        called as part of the change, before the new look is photographed (leaving a page)."""
         def change():
             ThemeManager.set_theme(name, persist=False)
             self.refresh_theme()
@@ -226,31 +270,45 @@ class QRCodeStudioApp:
         self.theme_transition.run(change)
 
     def refresh_theme(self):
-        """Re-apply the active theme across the shell, pages and components."""
-        theme = ThemeManager.get_theme()
+        """Re-apply the active theme across the shell, pages and components.
 
-        ThemeManager.apply_mode(self.root)
-        # Generic pass first: every widget colour that belongs to the previous
-        # theme moves to the same token of the new one (covers any widget a
-        # component's own refresh_theme does not know about).
-        ThemeManager.retheme_tree(self.root)
+        It always runs to the end: a part that fails is logged and the other parts are still
+        refreshed (the first error is raised afterwards), and a change requested while this runs is
+        applied right after, so the window never keeps colours of two themes."""
+        if self._refreshing:
+            self._refresh_again = True
+            return
+        self._refreshing = True
+        failures = []
 
-        self.root.configure(fg_color=theme["background"])
-        self.sidebar.refresh_theme()
-        self.header.refresh_theme()
+        def step(label, action):
+            try:
+                action()
+            except Exception as e:
+                app_log.get_logger().exception("Theme refresh failed in %s", label)
+                failures.append(e)
 
-        # Header / Navigation
-        self.header.refresh_theme()
-
-        # Pages (each cascades to its components defensively)
-        if hasattr(self.generate_page, "refresh_theme"):
-            self.generate_page.refresh_theme()
-        if hasattr(self.scan_page, "refresh_theme"):
-            self.scan_page.refresh_theme()
-        self.history_page.refresh_theme()
-        self.bulk_page.refresh_theme()
-
-        self.root.update_idletasks()
+        try:
+            for _attempt in range(3):           # a change that arrives meanwhile is applied by the next round
+                self._refresh_again = False
+                step("the window mode", lambda: ThemeManager.apply_mode(self.root))
+                # Generic pass first: every widget colour that belongs to the previous theme moves to
+                # the same token of the new one (covers any widget a component's own refresh_theme
+                # does not know about).
+                step("the generic pass", lambda: ThemeManager.retheme_tree(self.root))
+                step("the window", lambda: self.root.configure(fg_color=ThemeManager.get_theme()["background"]))
+                step("the sidebar", self.sidebar.refresh_theme)
+                step("the header", self.header.refresh_theme)
+                for name, page in self._pages.items():
+                    if hasattr(page, "refresh_theme"):
+                        step(f"the {name} page", page.refresh_theme)
+                self.root.update_idletasks()
+                if not (self._refresh_again or ThemeManager.needs_retheme()):
+                    break
+        finally:
+            self._refreshing = False
+        if failures:
+            raise failures[0]
 
     # ==================================================
 

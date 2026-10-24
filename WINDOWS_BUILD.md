@@ -142,7 +142,7 @@ Manual test checklist:
       large file; a row with an error is shown and skipped.
 - [ ] **Window:** the window opens on screen (also after moving it to a second monitor and unplugging it).
 - [ ] **Intro:** the full-screen splash plays, then the maximized main window appears.
-- [ ] **Themes:** Settings ⚙ → pick a theme from the gallery (Midnight … Daylight) → Apply.
+- [ ] **Themes:** Settings (last entry of the sidebar, or the ⚙ in the header) → pick a theme from the gallery (Midnight … Daylight): the liquid transition covers the whole window → Apply.
 
 A quick headless sanity check of the generate→scan→clipboard logic (no GUI) also exists:
 

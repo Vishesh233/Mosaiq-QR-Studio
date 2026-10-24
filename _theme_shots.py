@@ -82,19 +82,14 @@ def _one(theme, outdir):
     shot("bulk")
     app.show_generate_page()
 
-    # Settings dialog (its own window handle, so still window-only).
-    from ui.dialogs.settings_dialog import SettingsDialog
-
-    dlg = SettingsDialog(app.header)
-    dlg.geometry("+120+60")
-    end = time.time() + 1.0   # CTkToplevel finishes its first paint after a short delay
+    # The Settings page (part of the main window, so still window-only).
+    app.show_settings_page()
+    end = time.time() + 1.0
     while time.time() < end:
         root.update()
         time.sleep(0.02)
-    # GA_ROOT: a transient dialog's GetParent is its owner, not its own frame.
-    capture_window(win32gui.GetAncestor(dlg.winfo_id(), 2)).save(
-        os.path.join(outdir, f"{theme}-settings.png"))
-    dlg.destroy()
+    shot("settings")
+    app.settings_page.cancel()
 
     # Colour picker, with a few recent colours so that row is visible.
     from ui.dialogs.color_picker import ColorPickerDialog
