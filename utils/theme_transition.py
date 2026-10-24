@@ -16,6 +16,11 @@ How it works (everything lives here; the app only calls ``ThemeTransition.run``)
    (``Image.composite``), plus the edge glow, until the end or until the user clicks / presses a key
    / moves or resizes the window, which jumps straight to the final state.
 
+The overlay is a tool window (no taskbar button, not in Alt+Tab, never takes the focus). The effect ends
+at once when the window is minimized or moved, when the focus goes to another program, or on any click
+or key; and a safety timer removes the overlay DURATION_SEC + 1 s after the start whatever happens (a
+worker stuck in a frame can never keep it, or the window, waiting).
+
 The mask is drawn at half resolution (and the picture at a smaller size when frames take too long)
 and scaled up, so its edges stay smooth. Frames are drawn on a worker thread while the main thread
 shows the previous one; the animation follows the real clock (a slow PC drops frames instead of
@@ -75,6 +80,32 @@ SETTING_KEY = "animate_theme_changes"
 
 SPI_GETCLIENTAREAANIMATION = 0x1042
 PW_RENDERFULLCONTENT = 0x2
+
+# Window styles of the overlay: a tool window (no taskbar button, not in Alt+Tab) that never takes focus.
+GWL_EXSTYLE = -20
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_APPWINDOW = 0x00040000
+WS_EX_NOACTIVATE = 0x08000000
+SWP_FLAGS = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020      # NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED
+SAFETY_EXTRA_SEC = 1.0                   # the overlay is destroyed at most this long after DURATION_SEC, whatever happens
+
+
+def make_tool_window(window):
+    """Make a Tk window a tool window that is never activated: it gets no taskbar button, is not
+    listed by Alt+Tab, and clicking it does not take the focus from the application."""
+    if not sys.platform.startswith("win"):
+        return
+    user32 = ctypes.windll.user32
+    user32.GetWindowLongW.argtypes = (wintypes.HWND, ctypes.c_int)
+    user32.GetWindowLongW.restype = ctypes.c_long
+    user32.SetWindowLongW.argtypes = (wintypes.HWND, ctypes.c_int, ctypes.c_long)
+    user32.SetWindowLongW.restype = ctypes.c_long
+    user32.SetWindowPos.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                    ctypes.c_int, wintypes.UINT)
+    hwnd = wintypes.HWND(window.winfo_id())
+    style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) & ~WS_EX_APPWINDOW)
+    user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FLAGS)
 
 
 class SnapshotError(Exception):
@@ -436,9 +467,9 @@ class _Producer:
             self.error = e
 
     def stop(self):
+        """Ask the workers to stop. Never waits: a worker stuck in a frame is a daemon thread and
+        simply finishes (or not) on its own, it must never keep the window waiting."""
         self._stop_flag.set()
-        for thread in self._threads:
-            thread.join(timeout=2.0)
 
 
 class _Overlay:
@@ -450,15 +481,19 @@ class _Overlay:
         self.window = window
         self.size = old.size
         self.top = tkinter.Toplevel(window)
-        self.top.overrideredirect(True)              # no frame, no taskbar button
+        self.top.withdraw()                          # styled before it is shown
+        self.top.overrideredirect(True)              # no frame
         self.top.transient(window)                   # stays above its window only
         self.top.configure(bg="black", cursor="arrow")
+        make_tool_window(self.top)                   # no taskbar button, not in Alt+Tab, never takes focus
         width, height = old.size
         self.top.geometry(f"{width}x{height}+{window.winfo_rootx()}+{window.winfo_rooty()}")
         self.canvas = tkinter.Canvas(self.top, width=width, height=height, highlightthickness=0, bd=0, bg="black")
         self.canvas.pack()
         self.photo = ImageTk.PhotoImage(old)
         self.canvas.create_image(0, 0, image=self.photo, anchor="nw")
+        self.top.deiconify()
+        make_tool_window(self.top)                   # (Tk may have re-created the window when it was shown)
         self.renderer = None
         self.producer = None
         self.shown_T = -1.0
@@ -500,6 +535,7 @@ class ThemeTransition:
         self.config = config
         self._overlays = []
         self._job = None
+        self._safety_job = None
         self._started = 0.0
         self._quality = 1.0
         self._frame_times = []          # the last few frames (decides the resolution)
@@ -567,14 +603,27 @@ class ThemeTransition:
         for overlay in self._overlays:
             overlay.producer = _Producer(overlay.renderer, self._started, duration)
             overlay.producer.start()
+        # Safety net, independent of the frame loop and of the workers: whatever goes wrong, the
+        # overlay is gone DURATION_SEC + 1 s after the start.
+        self._safety_job = self.root.after(int((duration + SAFETY_EXTRA_SEC) * 1000), self._safety)
         self._tick()
         return True
+
+    def _safety(self):
+        self._safety_job = None
+        if self._overlays:
+            get_logger().warning("Theme transition was still showing %.1f s after its start; it was ended.",
+                                 time.perf_counter() - self._started)
+            self.finish()
 
     def finish(self):
         """Jump to the final state now (the new theme is already applied underneath)."""
         if self._job is not None:
             self.root.after_cancel(self._job)
             self._job = None
+        if self._safety_job is not None:
+            self.root.after_cancel(self._safety_job)
+            self._safety_job = None
         for overlay in self._overlays:
             if overlay.producer is not None:
                 overlay.producer.stop()
@@ -624,6 +673,16 @@ class ThemeTransition:
                 overlay.bindings.append((widget, sequence, widget.bind(sequence, skip, add="+")))
         funcid = overlay.window.bind("<Configure>", lambda _e: overlay.moved() and self.finish(), add="+")
         overlay.bindings.append((overlay.window, "<Configure>", funcid))
+        funcid = overlay.window.bind("<Unmap>", lambda e: e.widget is overlay.window and self.finish(), add="+")
+        overlay.bindings.append((overlay.window, "<Unmap>", funcid))             # minimized or hidden
+        funcid = overlay.window.bind("<FocusOut>", lambda e: self.root.after(60, self._focus_check), add="+")
+        overlay.bindings.append((overlay.window, "<FocusOut>", funcid))          # another program took over
+
+    def _focus_check(self):
+        """The focus left the window: it is fine when it went to one of our own windows (a dialog),
+        otherwise the user switched to another program and the effect ends."""
+        if self._overlays and self.root.focus_displayof() is None:
+            self.finish()
 
     def _tick(self):
         """Show the newest finished frame of every overlay; ends the animation on time."""
@@ -632,7 +691,12 @@ class ThemeTransition:
             return
         now = time.perf_counter()
         T = (now - self._started) / self._duration
-        self._overlays = [o for o in self._overlays if o.alive()]    # a closed window drops out
+        gone = [o for o in self._overlays if not (o.alive() and o.window.state() in ("normal", "zoomed"))]
+        for overlay in gone:                          # a closed, minimized or hidden window ends its effect
+            if overlay.producer is not None:
+                overlay.producer.stop()
+            overlay.destroy()
+        self._overlays = [o for o in self._overlays if o not in gone]
         failed = next((o.producer.error for o in self._overlays if o.producer and o.producer.error), None)
         if failed is not None:
             get_logger().error("Theme transition stopped: %s", failed, exc_info=failed)

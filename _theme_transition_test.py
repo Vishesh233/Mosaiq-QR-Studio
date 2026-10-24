@@ -270,6 +270,95 @@ def test_on_screen():
     root.geometry("1280x800+20+20")
     settle(0.3)
 
+    # --- the overlay is a tool window: no taskbar button, not in Alt+Tab, never takes the focus ---
+    import ctypes
+    user32 = ctypes.windll.user32
+    user32.GetWindowLongW.restype = ctypes.c_long
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
+    settle(0.2)
+    handle = manager._overlays[0].top.winfo_id()
+    ex = user32.GetWindowLongW(ctypes.c_void_p(handle), -20) & 0xFFFFFFFF
+    check("overlay is a tool window", ex & tt.WS_EX_TOOLWINDOW, hex(ex))
+    check("... that is not an app window (no taskbar button)", not ex & tt.WS_EX_APPWINDOW, hex(ex))
+    check("... and never takes the focus", ex & tt.WS_EX_NOACTIVATE, hex(ex))
+
+    def alt_tab_windows():
+        """Visible top-level windows without an owner that are not tool windows: what Alt+Tab lists."""
+        found = []
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        def collect(h, _):
+            style = user32.GetWindowLongW(ctypes.c_void_p(h), -20) & 0xFFFFFFFF
+            if user32.IsWindowVisible(ctypes.c_void_p(h)) and not user32.GetWindow(ctypes.c_void_p(h), 4)                     and not style & tt.WS_EX_TOOLWINDOW:
+                found.append(h)
+            return True
+
+        user32.EnumWindows(collect, 0)
+        return found
+
+    check("Alt+Tab does not list the overlay", handle not in alt_tab_windows())
+    manager.finish()
+
+    # --- minimizing the window ends it ---
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    settle(0.2)
+    root.iconify()
+    settle(0.3)
+    check("minimizing the window ends the animation and removes the overlay", not manager.running and not overlays())
+    root.deiconify()
+    settle(0.5)
+    check("... and the window comes back normally", root.state() in ("normal", "zoomed"))
+
+    # --- losing the focus to another program ends it; moving the focus to our own dialog does not ---
+    manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
+    settle(0.2)
+    real_focus = root.focus_displayof
+    root.focus_displayof = lambda: root                      # focus stays in the application
+    root.event_generate("<FocusOut>")
+    settle(0.3)
+    check("focus moving inside the application does not end the animation", manager.running)
+    root.focus_displayof = lambda: None                      # focus went to another program
+    root.event_generate("<FocusOut>")
+    settle(0.3)
+    root.focus_displayof = real_focus
+    check("focus going to another program ends the animation", not manager.running and not overlays())
+
+    # --- a worker that hangs never keeps the overlay (or the window) waiting ---
+    real_render = tt.FrameRenderer.render
+
+    def stuck(self, T, quality=1.0, phase=None):
+        time.sleep(4)
+        return real_render(self, T, quality, phase)
+
+    tt.FrameRenderer.render = stuck
+    try:
+        manager.run(lambda: (ThemeManager.set_theme("Midnight", persist=False), app.refresh_theme()), duration=0.8)
+        begun = time.time()
+        while manager.running and time.time() - begun < 5:
+            root.update()
+            time.sleep(0.005)
+        took = time.time() - begun
+    finally:
+        tt.FrameRenderer.render = real_render
+    check("a hung worker: the overlay is gone on time (duration 0.8 s)", not manager.running and not overlays() and took < 1.4,
+          f"{took:.1f} s")
+    manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()), duration=3.0)
+    settle(0.2)
+    begun = time.time()
+    manager.finish()
+    check("finish() returns at once (it does not wait for workers)", time.time() - begun < 0.3, f"{time.time() - begun:.2f} s")
+
+    # --- the safety timer ends it even when the frame loop itself has stopped ---
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()), duration=0.5)
+    manager._tick = lambda: None                              # the loop dies
+    settle(0.9)
+    check("with the frame loop dead the overlay is still up before the safety limit", manager.running)
+    settle(1.0)
+    del manager._tick
+    log = open(os.path.join(LOG_DIR, "mosaiq.log"), encoding="utf-8", errors="replace").read()
+    check("the safety timer removes the overlay at duration + 1 s", not manager.running and not overlays()
+          and tt.SAFETY_EXTRA_SEC == 1.0 and "was ended" in log)
+
     # --- moving the window ends it too (the overlay would no longer cover it) ---
     manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
     settle(0.1)
