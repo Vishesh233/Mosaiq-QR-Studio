@@ -1,3 +1,5 @@
+import tkinter
+
 import customtkinter as ctk
 from tkinter import messagebox
 
@@ -15,6 +17,23 @@ def dialog_size(screen_width, screen_height, scaling):
     width = max(520, min(760, int(screen_width / scaling) - 60))
     height = max(420, min(990, int(screen_height / scaling) - 130))
     return width, height
+
+
+def dialog_position(parent_rect, work_areas, size_px):
+    """(x, y) in physical px for a dialog of ``size_px`` = (width, height): centred over the parent
+    window, then moved so that the WHOLE dialog is inside the work area of the monitor the parent is
+    on (so its Apply / Cancel footer can never be below the bottom of the screen).
+    ``parent_rect`` is (left, top, right, bottom); ``work_areas`` the monitors' usable rectangles.
+    Returns None when the parent is on no monitor (then the system places the dialog)."""
+    centre_x = (parent_rect[0] + parent_rect[2]) / 2
+    centre_y = (parent_rect[1] + parent_rect[3]) / 2
+    area = next((a for a in work_areas if a[0] <= centre_x < a[2] and a[1] <= centre_y < a[3]), None)
+    if area is None:
+        return None
+    width, height = size_px
+    x = min(max(round(centre_x - width / 2), area[0]), max(area[0], area[2] - width))
+    y = min(max(round(centre_y - height / 2), area[1]), max(area[1], area[3] - height))
+    return x, y
 
 
 def ask_save_changes(parent):
@@ -85,7 +104,8 @@ class SettingsDialog(ctk.CTkToplevel):
         apply_window_icon(self)
         width, height = dialog_size(self.winfo_screenwidth(), self.winfo_screenheight(),
                                     self._get_window_scaling())
-        self.geometry(f"{width}x{height}")
+        position = self._position(width, height)
+        self.geometry(f"{width}x{height}" + (f"+{position[0]}+{position[1]}" if position else ""))
         self.resizable(False, False)
 
         # Modal behaviour + clean focus return to the parent window.
@@ -112,6 +132,18 @@ class SettingsDialog(ctk.CTkToplevel):
         self._update_history_count()
 
     # ======================================================
+
+    def _position(self, width, height):
+        """Where the dialog goes: on screen, over the main window (see ``dialog_position``)."""
+        from utils import window_guard
+        try:
+            rect = (self.parent.winfo_toplevel().winfo_rootx(), self.parent.winfo_toplevel().winfo_rooty(),
+                    self.parent.winfo_toplevel().winfo_rootx() + self.parent.winfo_toplevel().winfo_width(),
+                    self.parent.winfo_toplevel().winfo_rooty() + self.parent.winfo_toplevel().winfo_height())
+            scaling = self._get_window_scaling()
+            return dialog_position(rect, window_guard.work_areas(), (round(width * scaling), round(height * scaling)))
+        except tkinter.TclError:
+            return None
 
     def _find_app(self):
         """Walk up the widget tree to locate the QRCodeStudioApp instance.

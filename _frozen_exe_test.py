@@ -49,7 +49,22 @@ def check(name, ok, detail=""):
         problems.append(f"{name} {detail}".strip())
 
 
+def refuse_if_app_running():
+    """Another copy of the built app (yours, or one a failed run left behind) would sit on top of this
+    test's windows and make its clicks land in the wrong place: say so and stop."""
+    import subprocess as _sp
+    out = _sp.run(["powershell", "-NoProfile", "-Command",
+                   "Get-Process MosaiqQRStudio -ErrorAction SilentlyContinue | "
+                   "Where-Object { $_.Path -like '*dist?MosaiqQRStudio?*' } | ForEach-Object { $_.Id }"],
+                  capture_output=True, text=True).stdout.split()
+    if out:
+        print(f"STOP: Mosaiq QR Studio from dist is already running (process {', '.join(out)}). "
+              "Close it and run this test again; nothing was started.")
+        sys.exit(2)
+
+
 def main():
+    refuse_if_app_running()
     if not os.path.exists(EXE):
         print("dist exe not found; build it first")
         sys.exit(2)

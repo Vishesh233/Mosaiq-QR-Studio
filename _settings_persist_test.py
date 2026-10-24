@@ -238,6 +238,22 @@ def main():
     settings_store.reload()
     check("the next write repairs it", (on_disk() or {}).get("theme") == "Graphite")
 
+    # ---- the dialog is put on screen, whatever Windows would have cascaded it to ----
+    from ui.dialogs.settings_dialog import dialog_position
+    area = (0, 0, 1920, 1160)
+    for parent in ((0, 0, 1920, 1160), (-9, -9, 1929, 1149), (300, 200, 1500, 900), (1500, 800, 3000, 1500)):
+        for size in ((950, 1085), (950, 700), (1200, 400)):
+            at = dialog_position(parent, [area], size)
+            if parent[0] >= area[2] or at is None:
+                continue
+            check(f"dialog {size} for parent {parent} sits inside the work area",
+                  at[0] >= area[0] and at[1] >= area[1] and at[0] + size[0] <= area[2] and at[1] + size[1] <= area[3], str(at))
+    check("a parent on no monitor gives no position (the system decides)",
+          dialog_position((-30000, -30000, -28700, -29200), [area], (950, 1085)) is None)
+    check("a dialog is centred over a parent that has room", dialog_position((200, 100, 1000, 700), [area], (400, 300)) == (400, 250))
+    check("with two monitors the dialog stays on the parent's monitor",
+          dialog_position((-1900, 150, -100, 1100), [(0, 0, 1920, 1160), (-1920, 113, 0, 1193)], (950, 1000))[0] < 0)
+
     # ---- the footer: Apply and Cancel are always visible ----
     for screen_w, screen_h, scaling in ((1920, 1200, 1.25), (1920, 1080, 1.5), (1366, 768, 1.0),
                                         (1366, 768, 1.25), (1280, 720, 1.5), (3840, 2160, 1.5)):

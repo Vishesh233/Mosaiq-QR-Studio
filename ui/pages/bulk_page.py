@@ -253,19 +253,28 @@ class BulkPage(TwoColumnPage):
         if pixels / self._scaling() >= 100:
             self._table_width = pixels / self._scaling()
 
-    def _on_table_resized(self, event):
-        self._remember_table_width(event.width)
+    def _layout_is_current(self):
+        """Is the table drawn for its present width? Skip only when the room did not shrink (text drawn
+        for more room would overflow its cell) and grew by little (a scrollbar appearing or going away)."""
         columns, room = table_layout(self._table_width)
         drawn = self._layout_key
-        if drawn and drawn[0] == tuple(c[0] for c in columns) and abs(drawn[1] - room) <= 24:
-            return                               # same columns, same text length
+        return bool(drawn and drawn[0] == tuple(c[0] for c in columns) and -2 <= room - drawn[1] <= 24)
+
+    def _on_table_resized(self, event):
+        self._remember_table_width(event.width)
+        if self._layout_is_current():
+            return
         if self._relayout_job is not None:
             self.after_cancel(self._relayout_job)
         self._relayout_job = self.after(150, self._relayout)
 
     def _relayout(self):
         self._relayout_job = None
-        self._draw_table()
+        if self.job is not None and self.job.running:  # rebuilding the table takes a moment: not while codes are made
+            self._relayout_job = self.after(400, self._relayout)
+            return
+        if not self._layout_is_current():              # (a draw in between may already have fixed it)
+            self._draw_table()
 
     def _draw_table(self):
         theme = ThemeManager.get_theme()
@@ -308,7 +317,7 @@ class BulkPage(TwoColumnPage):
             result = row.error or ("OK" + (f"  ·  {row.notes[0]}" if row.notes else ""))
             color = theme["danger"] if row.error else (theme["warning"] if row.notes else theme["success"])
             texts = {"number": str(row.number), "type": row.type, "file": clip(row.stem, stem_chars),
-                     "content": clip_to_width(" ".join(row.payload.split()), (room - 6) * scaling, font) or "—",
+                     "content": clip_to_width(" ".join(row.payload.split()), (room - 6) * scaling * 0.96, font) or "—",
                      "result": result}
             for column, (key, _name, width) in enumerate(columns):
                 # Content asks for little and stretches to the column, so a long text is clipped

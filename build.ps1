@@ -16,6 +16,17 @@ if (-not (Test-Path -LiteralPath $venvPy)) {
     throw "Virtualenv Python not found at: $venvPy`nCreate it first (see WINDOWS_BUILD.md)."
 }
 
+# A running copy of the app locks its files: stop BEFORE anything is deleted (a half-deleted
+# dist\MosaiqQRStudio would break that copy and the build).
+$appDir = Join-Path $root "dist\MosaiqQRStudio"
+$running = @(Get-Process -Name "MosaiqQRStudio" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase) })
+if ($running.Count -gt 0) {
+    $ids = ($running | ForEach-Object { $_.Id }) -join ", "
+    throw ("Mosaiq QR Studio is running from $appDir (process $ids). Close it and run build.ps1 again. " +
+           "Nothing was deleted or changed.")
+}
+
 Write-Host "==> Python: $(& $venvPy --version 2>&1)"
 
 Write-Host "==> Installing / upgrading PyInstaller..."

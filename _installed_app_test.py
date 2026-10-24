@@ -165,8 +165,15 @@ def all_windows_titled(title):
 def what_is_shown(main, pid):
     """The picture the user sees in the main window's area: the transition's overlay window while it
     is up (it is a window of its own), else the main window. Only these app windows are captured."""
-    overlays = intro_windows(main, pid)
-    return small(wc.capture_window(overlays[0] if overlays else main))
+    for _attempt in range(3):
+        overlays = intro_windows(main, pid)
+        try:
+            return small(wc.capture_window(overlays[0] if overlays else main))
+        except Exception:            # the overlay can be destroyed (animation over) between the lookup and the capture
+            if not overlays:
+                raise
+            time.sleep(0.05)
+    return small(wc.capture_window(main))
 
 
 def theme_transition_check(hwnd, left, top, width, height):
@@ -224,26 +231,60 @@ def theme_transition_check(hwnd, left, top, width, height):
           f"{np.abs(skipped - settled).mean():.2f}")
 
     # Cancel goes back to the starting theme
-    dl, dt, dr, db = win32gui.GetWindowRect(dialog)
-    click(dl + (dr - dl) * 847 / 968, db - 60 * scale / 1.25)    # Cancel in the footer
-    pump(5.0)
+    for _attempt in range(3):                                # a click can be eaten while the focus moves
+        dl, dt, dr, db = win32gui.GetWindowRect(dialog)
+        click(dl + (dr - dl) * 847 / 968, db - 60 * scale / 1.25)    # Cancel in the footer
+        pump(1.5)
+        if not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog):
+            break
+    closed_at = time.time()
+    for _wait in range(80):                                  # a slow first start after a build can take many seconds
+        if not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog):
+            break
+        pump(0.25)
+    print(f"      (Cancel: dialog closed {time.time() - closed_at:.1f} s after the last click)")
+    pump(3.0)
     after_cancel = what_is_shown(hwnd, pid)
     check("Cancel closes the dialog", not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog))
     check("Cancel brings the starting theme back", np.abs(after_cancel - before).mean() < 4.0,
           f"{np.abs(after_cancel - before).mean():.2f}")
 
 
+def refuse_if_app_running():
+    """Another copy of the built app (yours, or one a failed run left behind) would sit on top of this
+    test's windows and make its clicks land in the wrong place: say so and stop."""
+    import subprocess as _sp
+    out = _sp.run(["powershell", "-NoProfile", "-Command",
+                   "Get-Process MosaiqQRStudio -ErrorAction SilentlyContinue | "
+                   "Where-Object { $_.Path -like '*dist?MosaiqQRStudio?*' } | ForEach-Object { $_.Id }"],
+                  capture_output=True, text=True).stdout.split()
+    if out:
+        print(f"STOP: Mosaiq QR Studio from dist is already running (process {', '.join(out)}). "
+              "Close it and run this test again; nothing was started.")
+        sys.exit(2)
+
+
+env_appdata = []              # the throw-away APPDATA of the app this test started
+
+
 def main():
+    refuse_if_app_running()
     target = sys.argv[1] if len(sys.argv) > 1 else "exe"
     proc = None
     before_launch.update(handle for handle, _pid in all_windows())
-    if target in ("exe", "exe-intro"):
+    if target in ("exe", "exe-intro", "source-intro"):
         env = dict(os.environ, APPDATA=tempfile.mkdtemp())
+        env_appdata.append(env["APPDATA"])
         if target == "exe":
             env["QRSTUDIO_NO_SPLASH"] = "1"          # "exe-intro" plays the intro, like a fresh install
         else:
             env.pop("QRSTUDIO_NO_SPLASH", None)
-        proc = subprocess.Popen([EXE], env=env)
+        env.pop("QRSTUDIO_NO_THEME_ANIMATION", None)
+        if target == "source-intro":                 # the same checks on the source (errors go to stderr.txt)
+            proc = subprocess.Popen([sys.executable, os.path.join(HERE, "main.py")], env=env, cwd=HERE,
+                                    stderr=open(os.path.join(tempfile.gettempdir(), "mosaiq_source_stderr.txt"), "w"))
+        else:
+            proc = subprocess.Popen([EXE], env=env)
     else:
         subprocess.Popen(["explorer.exe", target])
 
@@ -309,6 +350,11 @@ def main():
     while time.time() < end and win32gui.IsWindow(hwnd) and find_window()[0]:
         pump(0.3)
     check("the app closes", not find_window()[0])
+    if proc is not None and target != "source-intro":
+        log = os.path.join(env_appdata[0], "QR Code Studio", "mosaiq.log") if env_appdata else ""
+        if log and os.path.exists(log):
+            print("--- mosaiq.log of this run ---")
+            print(open(log, encoding="utf-8", errors="replace").read()[-2500:])
     if proc is not None:
         try:
             check("the process exits", proc.wait(timeout=10) == 0)

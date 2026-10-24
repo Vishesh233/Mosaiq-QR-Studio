@@ -79,6 +79,10 @@ class QRCodeStudioApp:
         # App reference for dialogs (unchanged contract).
         self.root.app = self
 
+        # An error inside a button or timer callback must never vanish (a windowed exe has no
+        # console): it goes to mosaiq.log, and to stderr when there is one.
+        self.root.report_callback_exception = self._report_callback_exception
+
         # The liquid blob transition for live theme changes (never at start-up).
         self.theme_transition = ThemeTransition(
             self.root, windows=self._transition_windows,
@@ -200,6 +204,11 @@ class QRCodeStudioApp:
         self.generate_page.regenerate_entry(entry)
 
     # ==================================================
+
+    @staticmethod
+    def _report_callback_exception(exc_type, exc, tb):
+        app_log.get_logger().error("Unhandled error in a callback", exc_info=(exc_type, exc, tb))
+        traceback.print_exception(exc_type, exc, tb)
 
     def _transition_windows(self):
         """The windows the transition covers: the main window. A Settings dialog changes theme at

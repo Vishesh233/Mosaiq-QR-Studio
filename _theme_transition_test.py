@@ -440,6 +440,21 @@ def test_on_screen():
     ThemeManager.set_theme("Midnight", persist=False)
     app.refresh_theme()
     settle(0.3)
+    # a few dialogs in a row: each one is placed on screen with its footer visible (Windows alone would
+    # cascade them lower and lower)
+    from utils import window_guard
+    for _n in range(4):
+        probe = SettingsDialog(app.header)
+        settle(0.4)
+        areas = window_guard.work_areas()
+        rect = (probe.winfo_rootx(), probe.winfo_rooty(), probe.winfo_rootx() + probe.winfo_width(),
+                probe.winfo_rooty() + probe.winfo_height())
+        centre = ((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2)
+        area = next((a for a in areas if a[0] <= centre[0] < a[2] and a[1] <= centre[1] < a[3]), None)
+        check(f"dialog {_n + 1}: the whole dialog (footer included) is inside its monitor's work area",
+              area is not None and rect[3] <= area[3] + 2 and rect[1] >= area[1] - 2, f"{rect} in {area}")
+        probe.cancel()
+        settle(0.3)
     dlg = SettingsDialog(app.header)
     settle(0.4)
     runs = manager.runs
