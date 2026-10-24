@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liquid Blob Transition</title>
+<style>
+  :root { --bg:#0b0f14; --card:#121922; --line:#1f2a36; --text:#e6edf3; --muted:#8b98a5; --accent:#22d3ee; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; padding:20px 16px 40px; }
+  .wrap { max-width:980px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 16px; font-size:14px; }
+  canvas { width:100%; aspect-ratio:840/520; display:block; border-radius:14px; background:#000; border:1px solid var(--line); }
+  .panel { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px 18px; }
+  label { font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:6px; }
+  label span b { color:var(--text); font-weight:600; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button { background:#0f1720; color:var(--text); border:1px solid #2a3846; border-radius:9px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  button.on, button.primary { background:var(--accent); color:#04232a; border-color:var(--accent); font-weight:600; }
+  pre { margin:14px 0 0; background:#0f1720; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:12px; color:#b6c2cf; overflow:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Liquid Blob Transition (tuned)</h1>
+  <p class="sub">#1 wala blob, par kinare zyada organic, ink jaisi chhoti boondein jo blob me mil jaati hain, aur halki glowing edge. Neeche se settings badal ke dekho.</p>
+  <canvas id="cv"></canvas>
+
+  <div class="panel">
+    <label><span>Patches: <b id="vPatches">3</b></span>
+      <div class="row"><button data-p="3" class="on">3</button><button data-p="4">4</button></div></label>
+    <label><span>Wobble (kinaron ka lehrana): <b id="vWob">1.4</b></span><input id="wob" type="range" min="0" max="2.5" step="0.1" value="1.4"></label>
+    <label><span>Speed (seconds): <b id="vDur">1.8</b></span><input id="dur" type="range" min="0.6" max="3" step="0.1" value="1.8"></label>
+    <label><span>Ink droplets: <b id="vDrop">On</b></span>
+      <div class="row"><button id="drop" class="on">On / Off</button></div></label>
+    <label><span>Edge glow: <b id="vGlow">On</b></span>
+      <div class="row"><button id="glow" class="on">On / Off</button></div></label>
+    <label><span>Playback</span>
+      <div class="row"><button id="play" class="primary">▶ Play once</button><button id="loop" class="on">Loop</button></div></label>
+  </div>
+  <pre id="cfg"></pre>
+</div>
+
+<script>
+const W = 840, H = 520, DPR = Math.min(window.devicePixelRatio || 1, 2);
+const cv = document.getElementById('cv'); cv.width = W * DPR; cv.height = H * DPR;
+const ctx = cv.getContext('2d'); ctx.scale(DPR, DPR);
+
+// ---------- two mock app screens (theme A → theme B) ----------
+function rr(x, a, b, w, h, r) { x.beginPath(); x.roundRect(a, b, w, h, r); x.fill(); }
+function makeScreen(t) {
+  const c = document.createElement('canvas'); c.width = W * DPR; c.height = H * DPR;
+  const x = c.getContext('2d'); x.scale(DPR, DPR);
+  x.fillStyle = t.bg; x.fillRect(0, 0, W, H);
+  x.fillStyle = t.side; x.fillRect(0, 0, 170, H);
+  x.fillStyle = t.accent; rr(x, 20, 22, 34, 34, 9);
+  x.fillStyle = t.text; x.font = '600 17px system-ui'; x.fillText('Mosaiq', 64, 45);
+  ['Generate', 'Scan', 'Bulk', 'History', 'Settings'].forEach((n, i) => {
+    if (i === 0) { x.fillStyle = t.accentSoft; rr(x, 14, 82 + i * 46, 142, 36, 9); }
+    x.fillStyle = i === 0 ? t.accent : t.muted; x.font = '15px system-ui'; x.fillText(n, 30, 105 + i * 46);
+  });
+  x.fillStyle = t.card; rr(x, 196, 24, 380, 472, 16);
+  x.fillStyle = t.text; x.font = '600 18px system-ui'; x.fillText('Create QR', 220, 62);
+  for (let i = 0; i < 4; i++) { x.fillStyle = t.field; rr(x, 220, 86 + i * 70, 332, 44, 10); x.fillStyle = t.muted; rr(x, 236, 103 + i * 70, 120 + i * 30, 10, 5); }
+  x.fillStyle = t.accent; rr(x, 220, 420, 332, 48, 12);
+  x.fillStyle = t.btnText; x.font = '600 16px system-ui'; x.textAlign = 'center'; x.fillText('Generate', 386, 450); x.textAlign = 'left';
+  x.fillStyle = t.card; rr(x, 596, 24, 222, 472, 16);
+  x.fillStyle = t.accent; x.beginPath(); x.arc(622, 56, 6, 0, Math.PI * 2); x.fill();
+  x.fillStyle = t.text; x.font = '600 16px system-ui'; x.fillText('Result', 636, 62);
+  x.fillStyle = '#fff'; rr(x, 622, 96, 170, 170, 12);
+  x.fillStyle = t.qr; let s = 7;
+  for (let j = 0; j < 19; j++) for (let i = 0; i < 19; i++) {
+    s = (s * 16807) % 2147483647;
+    const eye = (i < 5 && j < 5) || (i > 13 && j < 5) || (i < 5 && j > 13);
+    if (eye ? (i % 4 === 0 || j % 4 === 0 || (i % 18 > 13 ? (i - 14) : i) === 2 && (j % 18 > 13 ? (j - 14) : j) === 2) : s % 2) rr(x, 631 + i * 8, 105 + j * 8, 7, 7, 2);
+  }
+  x.fillStyle = t.field; rr(x, 622, 290, 170, 40, 10); rr(x, 622, 342, 170, 40, 10);
+  x.fillStyle = t.name; x.font = '600 13px system-ui'; x.fillText(t.label, 622, 470);
+  return c;
+}
+const THEMES = [
+  { label: 'Theme: Midnight', bg: '#0b1020', side: '#0e1428', card: '#141b33', field: '#1c2544', text: '#e6e9ff', muted: '#5b6690', accent: '#8b5cf6', accentSoft: 'rgba(139,92,246,.18)', btnText: '#fff', qr: '#2e1065', name: '#8b5cf6' },
+  { label: 'Theme: Aqua Mint', bg: '#06191c', side: '#082226', card: '#0c2b30', field: '#123a40', text: '#e6fffb', muted: '#4f8b8f', accent: '#22d3ee', accentSoft: 'rgba(34,211,238,.16)', btnText: '#04232a', qr: '#0e4f57', name: '#22d3ee' }
+];
+const SCREENS = THEMES.map(makeScreen);
+
+// ---------- settings ----------
+const S = { patches: 3, wobble: 1.4, duration: 1.8, droplets: true, glow: true, loop: true };
+const clamp = v => Math.max(0, Math.min(1, v));
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+// Patch centres: top-left → middle → (right) → bottom-right
+function centres(n) {
+  return n === 3
+    ? [[-30, -30, 0.0, 520], [W * .52, H * .5, 1.9, 470], [W + 30, H + 30, 3.3, 1000]]
+    : [[-30, -30, 0.0, 480], [W * .4, H * .48, 1.9, 380], [W + 20, H * .2, 2.7, 420], [W + 30, H + 30, 3.3, 1000]];
+}
+const easeGrow = t => 1 - Math.pow(1 - t, 2);
+
+function blobPath(cx, cy, r, seed, time, wob) {
+  const p = new Path2D(), N = 96;
+  for (let k = 0; k <= N; k++) {
+    const a = k / N * Math.PI * 2;
+    const f = 1 + wob * (
+      0.10 * Math.sin(3 * a + seed + time * 0.9) +
+      0.06 * Math.sin(5 * a + seed * 2.3 - time * 1.4) +
+      0.04 * Math.sin(2 * a + seed * 4.1) +
+      0.03 * Math.sin(8 * a + seed * 1.7 + time * 2.2));
+    const x = cx + Math.cos(a) * r * f, y = cy + Math.sin(a) * r * f;
+    k ? p.lineTo(x, y) : p.moveTo(x, y);
+  }
+  p.closePath(); return p;
+}
+// small ink drops riding just outside the edge; they get swallowed as the blob grows
+function dropPaths(cx, cy, r, seed, p) {
+  const out = [];
+  if (p < 0.08 || p > 0.92) return out;
+  for (let d = 0; d < 9; d++) {
+    const a = seed * 2.1 + d * 0.71 + Math.sin(d * 3.7) * 0.3;
+    const lag = 1.06 + ((d * 37) % 10) / 55;
+    const size = (4 + (d * 13) % 9) * Math.sin(Math.PI * p);
+    const path = new Path2D(); path.arc(cx + Math.cos(a) * r * lag, cy + Math.sin(a) * r * lag, size, 0, Math.PI * 2);
+    out.push(path);
+  }
+  return out;
+}
+
+const mk = document.createElement('canvas'); mk.width = W * DPR; mk.height = H * DPR;
+const mc = mk.getContext('2d'); mc.scale(DPR, DPR);
+const gk = document.createElement('canvas'); gk.width = W * DPR; gk.height = H * DPR;
+const gc = gk.getContext('2d'); gc.scale(DPR, DPR);
+const full = (c, img) => c.drawImage(img, 0, 0, W * DPR, H * DPR, 0, 0, W, H);
+
+function render(from, to, t, time, accent) {
+  full(ctx, from);
+  if (t <= 0) return;
+  if (t >= 1) { full(ctx, to); return; }
+  const C = centres(S.patches), n = C.length, span = 0.55;
+  const shapes = [];
+  C.forEach(([x, y, s, rmax], k) => {
+    const p = clamp((t - k * (1 - span) / (n - 1)) / span);
+    if (p <= 0) return;
+    const r = rmax * easeGrow(p);
+    shapes.push(blobPath(x, y, r, s, time, S.wobble));
+    if (S.droplets) shapes.push(...dropPaths(x, y, r, s, p));
+  });
+  // reveal next screen through the patches
+  mc.globalCompositeOperation = 'source-over'; mc.clearRect(0, 0, W, H); mc.fillStyle = '#fff';
+  shapes.forEach(p => mc.fill(p));
+  mc.globalCompositeOperation = 'source-in'; full(mc, to);
+  ctx.drawImage(mk, 0, 0, W * DPR, H * DPR, 0, 0, W, H);
+  // glow only on the outer edge of the union
+  if (S.glow) {
+    const fade = Math.sin(Math.PI * t);
+    gc.globalCompositeOperation = 'source-over'; gc.clearRect(0, 0, W, H);
+    gc.strokeStyle = accent;
+    gc.globalAlpha = 0.18 * fade; gc.lineWidth = 22; shapes.forEach(p => gc.stroke(p));
+    gc.globalAlpha = 0.55 * fade; gc.lineWidth = 6; shapes.forEach(p => gc.stroke(p));
+    gc.globalAlpha = 1; gc.globalCompositeOperation = 'destination-out'; gc.fillStyle = '#000';
+    shapes.forEach(p => gc.fill(p));
+    ctx.drawImage(gk, 0, 0, W * DPR, H * DPR, 0, 0, W, H);
+  }
+}
+
+// ---------- playback ----------
+let start = performance.now(), dir = 0, playing = true;
+const HOLD = 900;
+function frame(now) {
+  const time = now / 1000, dur = S.duration * 1000;
+  let local = now - start;
+  if (local > HOLD + dur + HOLD) {
+    if (S.loop) { dir = 1 - dir; start = now; local = 0; } else playing = false;
+  }
+  const t = clamp((local - HOLD) / dur);
+  const from = SCREENS[dir], to = SCREENS[1 - dir];
+  render(from, to, playing ? t : 1, time, THEMES[1 - dir].accent);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- controls ----------
+const $ = id => document.getElementById(id);
+function showCfg() {
+  $('vPatches').textContent = S.patches; $('vWob').textContent = S.wobble.toFixed(1);
+  $('vDur').textContent = S.duration.toFixed(1); $('vDrop').textContent = S.droplets ? 'On' : 'Off';
+  $('vGlow').textContent = S.glow ? 'On' : 'Off';
+  $('cfg').textContent = 'Final settings (ye copy karke mujhe bhej do):\n' + JSON.stringify(
+    { patches: S.patches, path: 'top-left → middle' + (S.patches === 4 ? ' → right' : '') + ' → bottom-right', wobble: S.wobble, durationSec: S.duration, inkDroplets: S.droplets, edgeGlow: S.glow }, null, 2);
+}
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+  S.patches = +b.dataset.p; document.querySelectorAll('[data-p]').forEach(x => x.classList.toggle('on', x === b)); showCfg();
+});
+$('wob').oninput = e => { S.wobble = +e.target.value; showCfg(); };
+$('dur').oninput = e => { S.duration = +e.target.value; showCfg(); };
+$('drop').onclick = e => { S.droplets = !S.droplets; e.target.classList.toggle('on', S.droplets); showCfg(); };
+$('glow').onclick = e => { S.glow = !S.glow; e.target.classList.toggle('on', S.glow); showCfg(); };
+$('loop').onclick = e => { S.loop = !S.loop; e.target.classList.toggle('on', S.loop); if (S.loop) { playing = true; } showCfg(); };
+$('play').onclick = () => { playing = true; dir = 1 - dir; start = performance.now(); };
+showCfg();
+</script>
+</body>
+</html>

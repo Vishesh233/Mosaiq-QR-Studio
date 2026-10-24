@@ -1,20 +1,25 @@
 """Liquid blob transition shown when the app's theme changes.
 
 The old look is "wiped" away by three ink blobs that grow from the top-left corner, the middle
-and the bottom-right corner; small ink droplets run ahead of each blob and are swallowed by it,
-and a thin glow in the new theme's accent colour follows the outer edge. It lasts DURATION_SEC.
+and the bottom-right corner; small ink droplets ride just outside their edge and are swallowed as
+they grow, and a glow in the new theme's accent colour follows the outer edge of all the ink.
+It lasts DURATION_SEC. The shapes follow docs/design/liquid-blob-transition.html.
 
 How it works (everything lives here; the app only calls ``ThemeTransition.run``):
 
 1. a snapshot of the window's own client area (``PrintWindow``, never the screen) before the change;
-2. the change is applied (the theme), and a second snapshot is taken;
-3. a canvas covering the window shows, every frame, the new snapshot where an ink mask is white and
-   the old one elsewhere (``Image.composite``), plus the edge glow, until the end or until the user
-   clicks / presses a key / resizes, which jumps straight to the final state.
+2. a borderless window showing that snapshot is put over the client area at once, so the window
+   never looks frozen while the change is being applied underneath;
+3. the change is applied (the theme) and a second snapshot is taken (the overlay is a separate
+   window, so it is not in that snapshot);
+4. every frame shows the new snapshot where an ink mask is white and the old one elsewhere
+   (``Image.composite``), plus the edge glow, until the end or until the user clicks / presses a key
+   / moves or resizes the window, which jumps straight to the final state.
 
-The mask is drawn at half resolution (and smaller when frames take too long) and scaled up, so its
-edges stay smooth. The animation is driven by ``after()`` and the real clock: the window keeps
-answering, and a slow PC drops frames instead of making the animation longer.
+The mask is drawn at half resolution (and the picture at a smaller size when frames take too long)
+and scaled up, so its edges stay smooth. Frames are drawn on a worker thread while the main thread
+shows the previous one; the animation follows the real clock (a slow PC drops frames instead of
+making the animation longer).
 
 It does not run at start-up, when "Animate theme changes" is off, when Windows' "Animation effects"
 are off, or when no snapshot can be taken (that is logged as a warning and the theme is applied at once).
@@ -23,39 +28,42 @@ import ctypes
 import math
 import os
 import sys
-import time
 import threading
+import time
 import tkinter
 from ctypes import wintypes
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageTk
+from PIL import Image, ImageChops, ImageDraw, ImageTk
 
 from utils import settings_store
 from utils.app_log import get_logger
 
-DURATION_SEC = 3.0
+DURATION_SEC = 2.0
 
-# Every number of the effect (the values locked for the design; see the module docstring).
+# The reference page draws on an 840 x 520 canvas; lengths in px below are in that canvas.
+REFERENCE_SIZE = (840, 520)
+REFERENCE_DIAGONAL = math.hypot(*REFERENCE_SIZE)
+
+# Every number of the effect.
 CONFIG = {
     "patches": 3,
     "wobble": 1.2,
     "inkDroplets": True,
     "edgeGlow": True,
-    # centres: (x, y, margin in px): "TL" (-30, -30), middle (52 %, 50 %), "BR" (W + 30, H + 30)
+    # centres: (x, y, margin in px): top-left (-30, -30), middle (52 %, 50 %), bottom-right (W + 30, H + 30)
     "centres": ((None, None, -30), (0.52, 0.50, 0), (None, None, 30)),
-    "rmax": (0.55, 0.50, 1.05),          # final radius of each blob, times the window diagonal
+    # final radius of each blob: the reference's 520 / 470 / 1000 px, as a share of its diagonal
+    "rmax": (520 / REFERENCE_DIAGONAL, 470 / REFERENCE_DIAGONAL, 1000 / REFERENCE_DIAGONAL),
     "stagger": 0.225,                    # patch k starts at T = k * stagger
     "span": 0.55,                        # and takes this much of T
     "seeds": (0.0, 1.9, 3.3),
     "points": 96,                        # corners of a blob outline
     "dropletsPerPatch": 9,
-    "dropletRadius": (0.006, 0.016),     # times the diagonal (smallest, largest)
-    "dropletLead": (0.12, 0.30),         # how far a droplet runs ahead of its blob (in progress)
-    "wobbleSettle": 0.7,                 # the wobble relaxes by this much as a blob finishes
-    "lastPatchBoost": 0.55,              # the last blob swells a little at the end: no gaps remain
-    "glowWide": (0.0075, 0.55),          # blur radius (times the diagonal), strength
-    "glowThin": (0.0016, 1.0),
+    "dropletWindow": (0.08, 0.92),       # droplets exist while the patch progress is inside this
+    "glowWide": (22.0, 0.18),            # stroke width (reference px) and strength of the soft glow
+    "glowThin": (6.0, 0.55),             # ... and of the sharp one
     "maskScale": 0.5,                    # the mask is drawn at this fraction of the window size
+    "glowScale": 0.35,                   # the glow is soft: drawn at this fraction
     "targetFrameMs": 33,                 # slower frames than this lower the resolution
     "minQuality": 0.4,
     "fps": 60,
@@ -98,11 +106,7 @@ def blob_factor(angle, seed, t, wobble):
 
 def patch_radius(T, k, diag, config=CONFIG):
     """Base radius (px) of patch ``k`` at time ``T``: ease-out growth to its final size."""
-    p = patch_progress(T, k, config)
-    radius = config["rmax"][k] * diag * ease_out(p)
-    if k == config["patches"] - 1:
-        radius *= 1 + config["lastPatchBoost"] * p ** 6
-    return radius
+    return config["rmax"][k] * diag * ease_out(patch_progress(T, k, config))
 
 
 def patch_centre(k, width, height, scaling, config=CONFIG):
@@ -119,57 +123,67 @@ def blob_outline(centre, radius, seed, t, wobble, points):
             for a in (2 * math.pi * i / points for i in range(points))]
 
 
-def droplets(k, T, centre, diag, t, wobble, config=CONFIG):
-    """[(x, y, radius)] of the ink droplets of patch ``k``: they sit just outside the blob, run
-    ahead of its edge, shrink as the patch finishes and are swallowed as the blob catches up."""
+def droplets(k, T, centre, diag, config=CONFIG):
+    """[(x, y, radius)] of the ink droplets of patch ``k``. As in the reference: nine droplets ride
+    just outside the blob's (unwobbled) radius, at 1.06 to 1.22 times it; the wobbling edge swallows
+    them as the blob grows, and their size follows sin(pi p)."""
     p = patch_progress(T, k, config)
-    if p <= 0 or p >= 1:
+    low, high = config["dropletWindow"]
+    if p < low or p > high:
         return []
     seed = config["seeds"][k]
-    count = config["dropletsPerPatch"]
-    base = config["rmax"][k] * diag
-    size_lo, size_hi = config["dropletRadius"]
-    lead_lo, lead_hi = config["dropletLead"]
+    r = patch_radius(T, k, diag, config)
+    unit = diag / REFERENCE_DIAGONAL
     out = []
-    for i in range(count):
-        frac = (math.sin(i * 2.399 + seed * 1.7) + 1) / 2                 # 0..1, fixed per droplet
-        angle = seed * 0.7 + 2 * math.pi * i / count + 0.35 * math.sin(i * 2.3 + seed)
-        lead = lead_lo + (lead_hi - lead_lo) * frac
-        radius = base * ease_out(clamp01(p + lead)) * (1.03 + 0.05 * frac)
-        radius *= blob_factor(angle, seed, t, wobble)
-        size = diag * (size_lo + (size_hi - size_lo) * frac) * math.sin(math.pi * p)
-        out.append((centre[0] + radius * math.cos(angle), centre[1] + radius * math.sin(angle), size))
+    for d in range(config["dropletsPerPatch"]):
+        angle = seed * 2.1 + d * 0.71 + math.sin(d * 3.7) * 0.3
+        lag = 1.06 + ((d * 37) % 10) / 55
+        size = (4 + (d * 13) % 9) * math.sin(math.pi * p) * unit
+        out.append((centre[0] + math.cos(angle) * r * lag, centre[1] + math.sin(angle) * r * lag, size))
     return out
 
 
-def render_mask(size, T, config=CONFIG, scale=None, scaling=1.0):
+def build_shapes(size, T, config=CONFIG, scaling=1.0, phase=None):
+    """The ink at time ``T`` as outlines in window pixels: ("poly", points) for blobs and
+    ("circle", x, y, radius) for droplets. ``phase`` (seconds) drives the wobble; default T * duration."""
+    width, height = size
+    diag = math.hypot(width, height)
+    t = T * DURATION_SEC if phase is None else phase
+    shapes = []
+    for k in range(config["patches"]):
+        if patch_progress(T, k, config) <= 0:
+            continue
+        centre = patch_centre(k, width, height, scaling, config)
+        shapes.append(("poly", blob_outline(centre, patch_radius(T, k, diag, config), config["seeds"][k], t,
+                                            config["wobble"], config["points"])))
+        if config["inkDroplets"]:
+            shapes.extend(("circle", x, y, r) for x, y, r in droplets(k, T, centre, diag, config))
+    return shapes
+
+
+def _fill(draw, shapes, scale):
+    for shape in shapes:
+        if shape[0] == "poly":
+            draw.polygon([(x * scale, y * scale) for x, y in shape[1]], fill=255)
+        else:
+            _kind, x, y, r = shape
+            r *= scale
+            if r >= 0.5:
+                draw.ellipse((x * scale - r, y * scale - r, x * scale + r, y * scale + r), fill=255)
+
+
+def render_mask(size, T, config=CONFIG, scale=None, scaling=1.0, phase=None, shapes=None):
     """The ink mask ("L": 255 = new theme) for a window of ``size`` px at time ``T`` (0..1),
     drawn at ``scale`` times that size (default config["maskScale"])."""
     scale = config["maskScale"] if scale is None else scale
-    width, height = size
-    small = (max(1, round(width * scale)), max(1, round(height * scale)))
+    small = (max(1, round(size[0] * scale)), max(1, round(size[1] * scale)))
     if T >= 1.0:
         return Image.new("L", small, 255)
     mask = Image.new("L", small, 0)
     if T <= 0.0:
         return mask
-    draw = ImageDraw.Draw(mask)
-    diag = math.hypot(width, height)
-    t = T * DURATION_SEC
-    for k in range(config["patches"]):
-        p = patch_progress(T, k, config)
-        if p <= 0:
-            continue
-        centre = patch_centre(k, width, height, scaling, config)
-        wobble = config["wobble"] * (1 - config["wobbleSettle"] * p * p)
-        outline = blob_outline(centre, patch_radius(T, k, diag, config), config["seeds"][k], t, wobble,
-                               config["points"])
-        draw.polygon([(x * scale, y * scale) for x, y in outline], fill=255)
-        if config["inkDroplets"]:
-            for x, y, r in droplets(k, T, centre, diag, t, wobble, config):
-                r *= scale
-                if r >= 0.5:
-                    draw.ellipse((x * scale - r, y * scale - r, x * scale + r, y * scale + r), fill=255)
+    _fill(ImageDraw.Draw(mask), shapes if shapes is not None else build_shapes(size, T, config, scaling, phase),
+          scale)
     return mask
 
 
@@ -190,24 +204,37 @@ def _scale_table(factor):
     return [min(255, int(v * factor + 0.5)) for v in range(256)]
 
 
-def edge_glow_alpha(mask, T, config=CONFIG, reduce=1):
-    """Alpha ("L") of the glow: a wide soft one plus a thin sharp one, only OUTSIDE the union of
-    all blobs (so the lines where blobs overlap never show), times sin(pi T). Same size as ``mask``,
-    or ``reduce`` times smaller (the glow is soft, so the frames compute it on fewer pixels)."""
+def edge_glow_alpha(size, T, config=CONFIG, scale=None, scaling=1.0, phase=None, shapes=None):
+    """Alpha ("L", ``scale`` times ``size``) of the glow, like the reference: every outline is stroked
+    wide and soft (22 px, 18 %) and thin and sharp (6 px, 55 %) in the accent colour, then everything
+    INSIDE the union of the ink is removed, so only the outer half of the strokes shows (the lines
+    where blobs overlap never do). Times sin(pi T): nothing at the start and the end."""
     strength = glow_strength(T)
     if strength <= 0.01 or not config["edgeGlow"]:
         return None
-    if reduce > 1:
-        mask = mask.resize((max(1, mask.width // reduce), max(1, mask.height // reduce)), Image.Resampling.BILINEAR)
-    diag = math.hypot(*mask.size)
-    outside = ImageChops.invert(mask)
-    wide_r, wide_gain = config["glowWide"]
-    thin_r, thin_gain = config["glowThin"]
-    wide = ImageChops.multiply(mask.filter(ImageFilter.GaussianBlur(max(2.0, wide_r * diag))), outside)
-    thin = ImageChops.multiply(mask.filter(ImageFilter.GaussianBlur(max(0.8, thin_r * diag))), outside)
-    alpha = ImageChops.lighter(wide.point(_scale_table(2.0 * wide_gain)),
-                               thin.point(_scale_table(2.0 * thin_gain)))
-    return alpha.point(_scale_table(strength))
+    scale = config["glowScale"] if scale is None else scale
+    shapes = shapes if shapes is not None else build_shapes(size, T, config, scaling, phase)
+    small = (max(1, round(size[0] * scale)), max(1, round(size[1] * scale)))
+    unit = math.hypot(*size) / REFERENCE_DIAGONAL
+    layers = []
+    for stroke, gain in (config["glowWide"], config["glowThin"]):
+        layer = Image.new("L", small, 0)
+        draw = ImageDraw.Draw(layer)
+        width = max(1, round(stroke * unit * scale))
+        for shape in shapes:
+            if shape[0] == "poly":
+                points = [(x * scale, y * scale) for x, y in shape[1]]
+                draw.line(points + [points[0]], fill=255, width=width, joint="curve")
+            else:
+                _kind, x, y, r = shape
+                r = r * scale + width / 2
+                if r >= 0.5:
+                    draw.ellipse((x * scale - r, y * scale - r, x * scale + r, y * scale + r), outline=255, width=width)
+        layers.append(layer.point(_scale_table(gain * strength)))
+    alpha = ImageChops.screen(layers[0], layers[1])
+    inside = Image.new("L", small, 0)
+    _fill(ImageDraw.Draw(inside), shapes, scale)
+    return ImageChops.multiply(alpha, ImageChops.invert(inside))
 
 
 class FrameRenderer:
@@ -237,7 +264,7 @@ class FrameRenderer:
             self._accent_images[size] = Image.new("RGB", size, self.accent)
         return self._accent_images[size]
 
-    def render(self, T, quality=1.0):
+    def render(self, T, quality=1.0, phase=None):
         """The frame at time ``T`` as an RGB image of the window's size. ``quality`` < 1 composes
         at a smaller size first (faster) and scales the result up."""
         if T >= 1.0:
@@ -245,10 +272,11 @@ class FrameRenderer:
         if T <= 0.0:
             return self.old
         old, new = self._images(quality)
-        mask = render_mask(self.size, T, self.config, scaling=self.scaling)
+        shapes = build_shapes(self.size, T, self.config, self.scaling, phase)
+        mask = render_mask(self.size, T, self.config, scaling=self.scaling, shapes=shapes)
         full = mask.resize(old.size, Image.Resampling.BILINEAR)
         frame = Image.composite(new, old, full)
-        alpha = edge_glow_alpha(mask, T, self.config, reduce=2)
+        alpha = edge_glow_alpha(self.size, T, self.config, scaling=self.scaling, shapes=shapes)
         if alpha is not None:
             alpha = alpha.resize(old.size, Image.Resampling.BILINEAR)
             frame = Image.composite(self._accent_image(old.size), frame, alpha)
@@ -361,76 +389,108 @@ def enabled():
 
 # ------------------------------------------------------------------ the animation on screen
 
-class _Producer(threading.Thread):
-    """Renders frames for one overlay on a worker thread while the main thread shows the previous
-    one (Pillow does its heavy work without holding the GIL). Only PIL images are touched here;
-    everything Tk stays on the main thread. ``latest`` is the newest finished (T, image)."""
+class _Producer:
+    """Renders frames for one overlay on worker threads while the main thread shows the previous
+    one. Pillow does its heavy work without holding the GIL, so a few workers draw different
+    moments at the same time and frames come out faster than one worker could make them.
+    Only PIL images are touched here; everything Tk stays on the main thread.
+    ``latest`` is the newest finished (T, image)."""
+
+    WORKERS = max(1, min(3, (os.cpu_count() or 2) // 2))
 
     def __init__(self, renderer, started, duration):
-        super().__init__(daemon=True, name="theme-transition")
         self.renderer = renderer
         self.started = started
         self.duration = duration
         self.quality = 1.0
         self.latest = None
         self.error = None
+        self._lock = threading.Lock()
+        self._claimed = -1.0
         self._stop_flag = threading.Event()
+        self._threads = [threading.Thread(target=self._work, daemon=True, name=f"theme-transition-{i}")
+                         for i in range(self.WORKERS)]
 
-    def run(self):
+    def start(self):
+        for thread in self._threads:
+            thread.start()
+
+    def _work(self):
         try:
-            last = -1.0
             while not self._stop_flag.is_set():
-                T = (time.perf_counter() - self.started) / self.duration
+                with self._lock:
+                    T = (time.perf_counter() - self.started) / self.duration
+                    fresh = T - self._claimed >= 0.003            # nobody drew (nearly) this moment yet
+                    if fresh:
+                        self._claimed = T
                 if T >= 1.0:
                     return
-                if T - last < 0.002:                 # nothing new to draw yet
+                if not fresh:
                     time.sleep(0.002)
                     continue
-                self.latest = (T, self.renderer.render(T, self.quality))
-                last = T
+                image = self.renderer.render(T, self.quality)
+                with self._lock:
+                    if self.latest is None or T > self.latest[0]:  # a slower worker never shows an older moment
+                        self.latest = (T, image)
         except Exception as e:          # reported by the main thread (it ends the animation, logs it)
             self.error = e
 
     def stop(self):
         self._stop_flag.set()
-        self.join(timeout=2.0)
+        for thread in self._threads:
+            thread.join(timeout=2.0)
 
 
 class _Overlay:
-    """A canvas that covers one window and shows the frames."""
+    """A borderless window exactly over a window's client area, showing the old snapshot at once and
+    then the frames. It is a window of its own (not a child), so a snapshot of the covered window
+    taken while the overlay is up never contains the overlay."""
 
-    def __init__(self, window, old, new, accent, scaling):
+    def __init__(self, window, old):
         self.window = window
         self.size = old.size
-        self.renderer = FrameRenderer(old, new, accent, scaling=scaling)
-        self.canvas = tkinter.Canvas(window, highlightthickness=0, bd=0, bg="black", cursor="arrow")
-        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        tkinter.Misc.tkraise(self.canvas)          # (Canvas.lift would raise canvas items)
-        window.update_idletasks()
+        self.top = tkinter.Toplevel(window)
+        self.top.overrideredirect(True)              # no frame, no taskbar button
+        self.top.transient(window)                   # stays above its window only
+        self.top.configure(bg="black", cursor="arrow")
+        width, height = old.size
+        self.top.geometry(f"{width}x{height}+{window.winfo_rootx()}+{window.winfo_rooty()}")
+        self.canvas = tkinter.Canvas(self.top, width=width, height=height, highlightthickness=0, bd=0, bg="black")
+        self.canvas.pack()
         self.photo = ImageTk.PhotoImage(old)
         self.canvas.create_image(0, 0, image=self.photo, anchor="nw")
-        self.bindings = []
+        self.renderer = None
         self.producer = None
         self.shown_T = -1.0
-        self.seen = (window.winfo_width(), window.winfo_height())     # the size a resize is judged against
+        self.bindings = []
+        self.top.update()                            # on screen now
+        self.where = self._where()
+
+    def _where(self):
+        return (self.window.winfo_rootx(), self.window.winfo_rooty(),
+                self.window.winfo_width(), self.window.winfo_height())
+
+    def moved(self):
+        """Did the covered window move or change size?"""
+        return self._where() != self.where
 
     def show(self, image):
         self.photo.paste(image)
 
     def alive(self):
-        return bool(self.window.winfo_exists())
+        return bool(self.window.winfo_exists() and self.top.winfo_exists())
 
     def destroy(self):
-        if self.window.winfo_exists():
-            self.canvas.destroy()
+        if self.top.winfo_exists():
+            self.top.destroy()
 
 
 class ThemeTransition:
-    """Runs the transition for an application window (and, when asked, its dialogs).
+    """Runs the transition for an application window.
 
-    ``run(change)`` takes the "before" snapshots, calls ``change()`` (which switches the theme),
-    takes the "after" snapshots and animates between them. ``windows`` gives the windows to cover
-    (the main window first); ``accent`` the new theme's accent colour.
+    ``run(change)`` takes the "before" snapshot, covers the window with it at once, calls
+    ``change()`` (which switches the theme), takes the "after" snapshot and animates between them.
+    ``windows`` gives the windows to cover (the main window first); ``accent`` the new theme's accent colour.
     """
 
     def __init__(self, root, windows=None, accent=None, config=CONFIG):
@@ -444,6 +504,9 @@ class ThemeTransition:
         self._quality = 1.0
         self._frame_times = []          # the last few frames (decides the resolution)
         self._all_times = []            # every frame of this animation (for the statistics)
+        self._frames = 0
+        self._last_shown = None
+        self._duration = DURATION_SEC
         self.last_run = None            # facts about the latest animation (frames, average ms ...)
         self.runs = 0                   # how many animations were started
 
@@ -465,26 +528,34 @@ class ThemeTransition:
             get_logger().warning("Theme transition skipped (no snapshot of the window): %s", e)
             change()
             return False
-        change()
+        # The old picture goes up now, so the window does not look frozen while the change is applied.
+        for window, old in zip(windows, before):
+            overlay = _Overlay(window, old)
+            self._overlays.append(overlay)
+            self._hook_skip(overlay)
+        self._raise_dialogs()
         try:
+            change()
             after = [capture_client(w) for w in windows]
         except SnapshotError as e:
             get_logger().warning("Theme transition skipped (no snapshot after the change): %s", e)
+            self.finish()
             return False
-        return self.start(windows, before, after, duration)
+        except Exception:
+            self.finish()                            # never leave the old picture over the window
+            raise
+        return self.start(before, after, duration)
 
-    def start(self, windows, before, after, duration=DURATION_SEC):
-        """Animate between ready-made snapshots (``run`` calls this)."""
-        scaling = windows[0]._get_window_scaling() if hasattr(windows[0], "_get_window_scaling") else 1.0
+    def start(self, before, after, duration=DURATION_SEC):
+        """Animate the covered windows between the snapshots (``run`` calls this)."""
+        scaling = self._overlays[0].window._get_window_scaling() if hasattr(
+            self._overlays[0].window, "_get_window_scaling") else 1.0
         accent = self._accent()
-        for window, old, new in zip(windows, before, after):
+        for overlay, old, new in zip(self._overlays, before, after):
             if old.size != new.size:
                 new = new.resize(old.size, Image.Resampling.BILINEAR)
-            overlay = _Overlay(window, old, new, accent, scaling)
-            self._overlays.append(overlay)
-            self._hook_skip(overlay)
-        for overlay in self._overlays:
-            overlay.renderer.render(0.5, 1.0)                # warm the caches: no slow first frame
+            overlay.renderer = FrameRenderer(old, new, accent, self.config, scaling=scaling)
+            overlay.renderer.render(0.5, 1.0)        # warm the caches: no slow first frame
         self.runs += 1
         self._duration = duration
         self._started = time.perf_counter()
@@ -507,9 +578,9 @@ class ThemeTransition:
         for overlay in self._overlays:
             if overlay.producer is not None:
                 overlay.producer.stop()
-            for sequence, funcid in overlay.bindings:
+            for widget, sequence, funcid in overlay.bindings:
                 try:
-                    overlay.window.unbind(sequence, funcid)
+                    widget.unbind(sequence, funcid)
                 except tkinter.TclError:
                     pass                              # the window was closed meanwhile
             overlay.destroy()
@@ -519,21 +590,40 @@ class ThemeTransition:
         self._overlays = []
 
     # ---- internals ----
-    def _hook_skip(self, overlay):
-        skip = lambda _event=None: self.finish()
-        overlay.canvas.bind("<Button>", skip)
-        overlay.canvas.bind("<Key>", skip)
-        overlay.canvas.focus_set()
-        for sequence in ("<Key>", "<Configure>"):
-            handler = skip if sequence == "<Key>" else self._on_configure(overlay)
-            funcid = overlay.window.bind(sequence, handler, add="+")
-            overlay.bindings.append((sequence, funcid))
+    def _toplevels(self):
+        """The application's other windows that are showing (a Settings dialog ...)."""
+        import customtkinter as ctk
+        found, stack = [], list(self.root.winfo_children())
+        while stack:
+            widget = stack.pop()
+            if isinstance(widget, ctk.CTkToplevel) and widget.winfo_viewable():
+                found.append(widget)
+            stack.extend(widget.winfo_children())
+        return found
 
-    def _on_configure(self, overlay):
-        def handler(event):
-            if event.widget is overlay.window and (event.width, event.height) != overlay.seen:
-                self.finish()
-        return handler
+    def _raise_dialogs(self):
+        """A dialog stays on top of the effect (it changes theme at once)."""
+        for dialog in self._toplevels():
+            dialog.lift()
+
+    def _hook_skip(self, overlay):
+        """A click on the overlay or a key skips at once. Clicks and keys anywhere else in the app (a
+        Settings dialog, the window itself) and moving or resizing the window skip too, but those are
+        attached a moment later: the click that started this transition is still being delivered and
+        must not end it."""
+        skip = lambda _event=None: self.finish()
+        overlay.top.bind("<Button>", skip)
+        overlay.top.bind("<Key>", skip)
+        self.root.after(80, lambda: self._attach_skip(overlay, skip))
+
+    def _attach_skip(self, overlay, skip):
+        if overlay not in self._overlays or not overlay.alive():
+            return
+        for widget in [overlay.window] + self._toplevels():
+            for sequence in ("<Key>", "<Button>"):
+                overlay.bindings.append((widget, sequence, widget.bind(sequence, skip, add="+")))
+        funcid = overlay.window.bind("<Configure>", lambda _e: overlay.moved() and self.finish(), add="+")
+        overlay.bindings.append((overlay.window, "<Configure>", funcid))
 
     def _tick(self):
         """Show the newest finished frame of every overlay; ends the animation on time."""
@@ -542,7 +632,7 @@ class ThemeTransition:
             return
         now = time.perf_counter()
         T = (now - self._started) / self._duration
-        self._overlays = [o for o in self._overlays if o.alive()]    # a closed dialog drops out
+        self._overlays = [o for o in self._overlays if o.alive()]    # a closed window drops out
         failed = next((o.producer.error for o in self._overlays if o.producer and o.producer.error), None)
         if failed is not None:
             get_logger().error("Theme transition stopped: %s", failed, exc_info=failed)

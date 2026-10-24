@@ -35,7 +35,7 @@ def test_maths():
     size = (640, 400)
     w, h = size
     cfg = tt.CONFIG
-    check("duration constant is 3.0 s", tt.DURATION_SEC == 3.0)
+    check("duration constant is 2.0 s", tt.DURATION_SEC == 2.0)
     check("config holds the locked numbers", cfg["patches"] == 3 and cfg["wobble"] == 1.2
           and cfg["inkDroplets"] is True and cfg["edgeGlow"] is True)
 
@@ -44,14 +44,16 @@ def test_maths():
     m1 = tt.render_mask(size, 1.0)
     check("T=1: everything is covered", m1.getextrema() == (255, 255), str(m1.getextrema()))
     check("mask is drawn at half resolution", m0.size == (320, 200), str(m0.size))
-    check("just before the end almost everything is covered",
-          tt.covered_fraction(tt.render_mask(size, 0.985)) > 0.995)
+    check("the ink covers the whole window well before the end (as in the reference)",
+          tt.covered_fraction(tt.render_mask(size, 0.9)) == 1.0)
+    check("blob end sizes follow the reference (520 / 470 / 1000 px of an 840 x 520 canvas)",
+          all(abs(cfg["rmax"][i] * tt.REFERENCE_DIAGONAL - v) < 1e-6 for i, v in enumerate((520, 470, 1000))))
 
     # coverage never goes down as T grows
     steps = 150
     areas = [tt.covered_fraction(tt.render_mask(size, i / steps)) for i in range(steps + 1)]
     worst = min(b - a for a, b in zip(areas, areas[1:]))
-    check("covered area never shrinks as T grows", worst >= -0.0015, f"worst step {worst:.5f}")
+    check("covered area never shrinks as T grows", worst >= -1e-9, f"worst step {worst:.6f}")
     check("coverage starts at 0 and ends at 1", areas[0] == 0 and areas[-1] == 1.0)
     check("coverage really grows", areas[steps // 2] > 0.2 and areas[steps // 4] > 0.02, str(areas[::30]))
 
@@ -81,19 +83,29 @@ def test_maths():
     outline = tt.blob_outline((100, 100), 50, 0.0, 0.0, 1.2, cfg["points"])
     check("outline has 96 points", len(outline) == 96)
 
-    # ink droplets
+    # ink droplets (as in the reference page)
     centre = tt.patch_centre(0, w, h, 1.0)
-    drops_mid = tt.droplets(0, 0.275, centre, diag, 0.8, 1.2)
+    p_mid = 0.5
+    T_mid = p_mid * cfg["span"]                              # patch 0 is at progress 0.5 here
+    drops_mid = tt.droplets(0, T_mid, centre, diag)
     check("nine droplets per patch", len(drops_mid) == 9, str(len(drops_mid)))
+
     def total_size(T):
-        return sum(r for _x, _y, r in tt.droplets(0, T, centre, diag, 0.8, 1.2))
-    check("droplet size follows sin(pi p)", total_size(0.275) > total_size(0.04) and total_size(0.275) > total_size(0.5),
-          f"{total_size(0.04):.1f} {total_size(0.275):.1f} {total_size(0.5):.1f}")
-    check("no droplets before the patch starts or after it finishes", not tt.droplets(0, 0.0, centre, diag, 0, 1.2)
-          and not tt.droplets(0, 0.56, centre, diag, 1.6, 1.2))
-    outside = sum(1 for x, y, r in drops_mid
-                  if math.hypot(x - centre[0], y - centre[1]) > tt.patch_radius(0.275, 0, diag) * 0.7)
-    check("droplets sit at the blob's edge or ahead of it", outside == 9, f"{outside} of 9")
+        return sum(r for _x, _y, r in tt.droplets(0, T, centre, diag))
+
+    low_T, high_T = cfg["span"] * 0.12, cfg["span"] * 0.88
+    check("droplet size follows sin(pi p)", total_size(T_mid) > total_size(low_T) > 0 and total_size(T_mid) > total_size(high_T) > 0,
+          f"{total_size(low_T):.1f} {total_size(T_mid):.1f} {total_size(high_T):.1f}")
+    check("no droplets before progress 0.08 or after 0.92 (nor before the patch starts)",
+          not tt.droplets(0, 0.0, centre, diag) and not tt.droplets(0, cfg["span"] * 0.05, centre, diag)
+          and not tt.droplets(0, cfg["span"] * 0.95, centre, diag) and tt.droplets(0, cfg["span"] * 0.1, centre, diag))
+    base = tt.patch_radius(T_mid, 0, diag)
+    lags = sorted(math.hypot(x - centre[0], y - centre[1]) / base for x, y, r in drops_mid)
+    check("droplets ride at 1.06 to 1.22 times the unwobbled radius", abs(lags[0] - 1.06) < 1e-6 and lags[-1] <= 1.06 + 9 / 55 + 1e-6
+          and all(1.06 - 1e-6 <= v <= 1.23 for v in lags), f"{lags[0]:.3f}..{lags[-1]:.3f}")
+    unit = diag / tt.REFERENCE_DIAGONAL
+    check("droplet radii are 4 to 12 px of the reference canvas, scaled",
+          all(4 * unit * 0.99 * math.sin(math.pi * p_mid) <= r <= 12 * unit * 1.01 for _x, _y, r in drops_mid))
     no_drops = dict(cfg, inkDroplets=False)
     a = tt.render_mask(size, 0.3, cfg)
     b = tt.render_mask(size, 0.3, no_drops)
@@ -102,21 +114,26 @@ def test_maths():
 
     # edge glow: only outside the union, strongest in the middle, none at the ends
     for T in (0.0, 1.0):
-        check(f"no glow at T={T}", tt.edge_glow_alpha(tt.render_mask(size, T), T) is None)
+        check(f"no glow at T={T}", tt.edge_glow_alpha(size, T) is None)
     check("glow strength is sin(pi T)", abs(tt.glow_strength(0.5) - 1) < 1e-12 and tt.glow_strength(0) == 0
           and abs(tt.glow_strength(1)) < 1e-9)
-    mask = tt.render_mask(size, 0.5)
-    alpha = tt.edge_glow_alpha(mask, 0.5)
     import numpy as np
+    T_glow = 0.3
+    shapes = tt.build_shapes(size, T_glow)
+    mask = tt.render_mask(size, T_glow, scale=cfg["glowScale"], shapes=shapes)
+    alpha = tt.edge_glow_alpha(size, T_glow, shapes=shapes)
+    check("glow and mask are drawn at the same size", alpha.size == mask.size, f"{alpha.size} {mask.size}")
     inside = np.asarray(mask) == 255
     inside_max = int(np.asarray(alpha)[inside].max()) if inside.any() else 0
     check("no glow inside the union (overlap lines never show)", inside_max == 0, f"max {inside_max}")
     check("glow is visible just outside the union", alpha.getextrema()[1] > 100, str(alpha.getextrema()))
-    weaker = tt.edge_glow_alpha(tt.render_mask(size, 0.5), 0.5).getextrema()[1]
-    ends = tt.edge_glow_alpha(tt.render_mask(size, 0.08), 0.08)
-    check("glow is weaker near the start than in the middle", ends is not None and ends.getextrema()[1] < weaker)
+    outside_values = np.asarray(alpha)[~inside]
+    check("the thin line is stronger than the soft glow (55 % vs 18 %)",
+          outside_values.max() > 0.5 * 255 * tt.glow_strength(T_glow) and (outside_values > 0).mean() > 0, str(outside_values.max()))
+    near_start = tt.edge_glow_alpha(size, 0.05)
+    check("glow is weaker near the start than at T=0.3", near_start is None or near_start.getextrema()[1] < alpha.getextrema()[1])
     off = dict(cfg, edgeGlow=False)
-    check("glow can be switched off", tt.edge_glow_alpha(mask, 0.5, off) is None)
+    check("glow can be switched off", tt.edge_glow_alpha(size, 0.3, off) is None)
 
     # frames
     from PIL import Image
@@ -173,8 +190,11 @@ def test_on_screen():
             root.update()
             time.sleep(0.005)
 
+    import tkinter
+
     def overlays():
-        return [w for w in root.winfo_children() if isinstance(w, __import__("tkinter").Canvas)]
+        """The overlay windows (plain Toplevels: a Settings dialog is a CTkToplevel)."""
+        return [w for w in root.winfo_children() if type(w) is tkinter.Toplevel]
 
     settle(0.5)
     check("start-up does not animate", not manager.running and manager.last_run is None and not overlays())
@@ -182,7 +202,17 @@ def test_on_screen():
     check("animation is enabled by default", tt.enabled() is True)
 
     # --- a live change runs; the new theme is already applied underneath ---
-    started = manager.run(lambda: (ThemeManager.set_theme("Emerald", persist=False), app.refresh_theme()))
+    seen = {}
+
+    def change_emerald():
+        shown = overlays()
+        seen.update(count=len(shown), visible=bool(shown) and all(o.winfo_viewable() for o in shown), running=manager.running)
+        ThemeManager.set_theme("Emerald", persist=False)
+        app.refresh_theme()
+
+    started = manager.run(change_emerald)
+    check("the old picture is already on screen when the change is applied (the window does not look frozen)",
+          seen == {"count": 1, "visible": True, "running": True}, str(seen))
     check("a theme change starts an animation", started is True and manager.running)
     check("the final theme is applied at once", ThemeManager.get_current_theme() == "Emerald"
           and app.sidebar._theme_name_label.cget("text") == "Emerald")
@@ -198,14 +228,30 @@ def test_on_screen():
         pixels = np.asarray(picture)
         check(f"the {name} snapshot shows the real window (not blank)", (pixels.min(axis=2) > 245).mean() < 0.2
               and pixels.std() > 10, f"white share {(pixels.min(axis=2) > 245).mean():.2f}")
+    check("the overlay sits exactly over the client area",
+          (box[0].winfo_rootx(), box[0].winfo_rooty()) == (root.winfo_rootx(), root.winfo_rooty()),
+          f"{(box[0].winfo_rootx(), box[0].winfo_rooty())} vs {(root.winfo_rootx(), root.winfo_rooty())}")
+    difference = np.abs(np.asarray(snap.renderer.old).astype(int) - np.asarray(snap.renderer.new).astype(int)).mean()
+    check("the 'after' snapshot is the new theme, not the overlay (they differ)", difference > 3, f"{difference:.1f}")
     settle(0.35)
     check("frames are being shown and the window keeps answering", manager._frames >= 3, f"{manager._frames} frames")
 
     # --- a click skips to the end ---
-    box[0].event_generate("<Button-1>", x=10, y=10)
+    box[0].event_generate("<Button-1>", x=10, y=10)       # a click on the overlay
     settle(0.05)
     check("a click ends the animation at once", not manager.running and not overlays())
     check("... and the final theme stays", ThemeManager.get_current_theme() == "Emerald")
+
+    # --- a click anywhere else in the app (the window itself, a dialog) skips as well ---
+    manager.run(lambda: (ThemeManager.set_theme("Graphite", persist=False), app.refresh_theme()))
+    check("a click right at the start does not end it (the starting click is still being delivered)",
+          manager.running)
+    settle(0.3)
+    check("click and key handlers are attached shortly after the start", len(manager._overlays[0].bindings) >= 3,
+          str(len(manager._overlays[0].bindings)))
+    root.event_generate("<ButtonPress-1>", x=40, y=40)
+    settle(0.05)
+    check("a click on the app window ends the animation", not manager.running and not overlays())
 
     # --- a key press skips too ---
     manager.run(lambda: (ThemeManager.set_theme("Ember", persist=False), app.refresh_theme()))
@@ -221,6 +267,15 @@ def test_on_screen():
     root.geometry("1200x760+20+20")
     settle(0.3)
     check("resizing the window ends the animation", not manager.running and not overlays())
+    root.geometry("1280x800+20+20")
+    settle(0.3)
+
+    # --- moving the window ends it too (the overlay would no longer cover it) ---
+    manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
+    settle(0.1)
+    root.geometry("1280x800+60+50")
+    settle(0.3)
+    check("moving the window ends the animation", not manager.running and not overlays())
     root.geometry("1280x800+20+20")
     settle(0.3)
 

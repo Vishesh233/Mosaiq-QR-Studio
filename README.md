@@ -37,7 +37,7 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
 - Eight themes with live preview: Midnight, Graphite, AMOLED, Aqua Mint, Ultraviolet, Ember, Emerald and the light Daylight
-- A **liquid ink transition** (three blobs, droplets, a glowing edge; 3 s, click or key skips it) plays when the theme changes in Settings. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
+- A **liquid ink transition** (three blobs, droplets, a glowing edge; 2 s, click or key skips it) plays when the theme changes in Settings. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
 - Settings has an Apply / Cancel footer: themes preview live, **Apply** saves everything, **Cancel** goes back, and closing with X asks whether to save; the saved theme is used on the next start
 - Works fully offline; nothing is collected or sent ([privacy policy](PRIVACY.md))
 

@@ -143,8 +143,10 @@ def small(image):
 
 
 def settings_window(main):
-    for handle, _pid in all_windows_titled("Settings"):
-        if handle != main:
+    """The app's own Settings dialog (another program's window may also be called "Settings")."""
+    main_pid = win32process.GetWindowThreadProcessId(main)[1]
+    for handle, pid in all_windows_titled("Settings"):
+        if handle != main and pid == main_pid:
             return handle
     return None
 
@@ -160,13 +162,21 @@ def all_windows_titled(title):
     return found
 
 
+def what_is_shown(main, pid):
+    """The picture the user sees in the main window's area: the transition's overlay window while it
+    is up (it is a window of its own), else the main window. Only these app windows are captured."""
+    overlays = intro_windows(main, pid)
+    return small(wc.capture_window(overlays[0] if overlays else main))
+
+
 def theme_transition_check(hwnd, left, top, width, height):
-    """Open Settings, pick Emerald: the window must change frame by frame (the blob transition),
+    """Open Settings, pick Emerald: what is shown must change frame by frame (the blob transition),
     a click must skip to the final theme, and Cancel must go back (also animated)."""
     import numpy as np
 
+    pid = win32process.GetWindowThreadProcessId(hwnd)[1]
     scale = ctypes.windll.user32.GetDpiForSystem() / 96.0
-    before = small(wc.capture_window(hwnd))
+    before = what_is_shown(hwnd, pid)
     click(left + width - 74, top + 102)                      # the gear button
     dialog = None
     end = time.time() + 10
@@ -181,36 +191,43 @@ def theme_transition_check(hwnd, left, top, width, height):
     dw = dr - dl
     click(dl + dw * 580 / 968, dt + 495 * scale / 1.25)      # the Emerald tile (second row, third)
     samples = []
-    for _ in range(18):                                      # watch the main window for about 7 s
-        samples.append(small(wc.capture_window(hwnd)))
-        pump(0.25)
+    for _ in range(20):                                      # watch the main window's area for about 5 s
+        samples.append(what_is_shown(hwnd, pid))
+        pump(0.1)
     moves = sum(1 for a, b in zip(samples, samples[1:]) if np.abs(a - b).mean() > 0.8)
-    check("the window changes frame by frame while the theme animates", moves >= 4, f"{moves} changing steps")
-    pump(1.0)
-    final = small(wc.capture_window(hwnd))
+    check("what is shown changes frame by frame while the theme animates", moves >= 4, f"{moves} changing steps")
+    pump(2.0)
+    final = what_is_shown(hwnd, pid)
     check("... and ends in a different look than it started",
           np.abs(final - before).mean() > 3.0, f"{np.abs(final - before).mean():.2f}")
-    check("... and the animation is over after 5 s (picture is stable)",
-          np.abs(small(wc.capture_window(hwnd)) - final).mean() < 0.5)
+    check("... and the animation is over (no overlay window, picture is stable)",
+          not intro_windows(hwnd, pid) and np.abs(what_is_shown(hwnd, pid) - final).mean() < 0.5)
 
-    # a click skips: pick another theme (Ember) and click inside the dialog at once
+    # a click skips: pick another theme (Ember) and click inside the dialog while it animates
     click(dl + dw * 365 / 968, dt + 495 * scale / 1.25)
-    pump(0.5)
-    mid = small(wc.capture_window(hwnd))
-    click(dl + dw * 0.5, dt + 120 * scale / 1.25)            # on the dialog's heading: skips
+    started = time.time()
+    mid = None
+    while time.time() - started < 6 and mid is None:         # wait until the overlay is up
+        if intro_windows(hwnd, pid):
+            mid = what_is_shown(hwnd, pid)
+        pump(0.05)
+    check("a second theme change shows the animation again", mid is not None)
+    overlay_up = bool(intro_windows(hwnd, pid))
+    if overlay_up:
+        click(dl + dw * 0.5, dt + 120 * scale / 1.25)        # a click on the dialog's heading skips
     pump(0.4)
-    skipped = small(wc.capture_window(hwnd))
+    check("a click skips: the overlay is gone at once", not intro_windows(hwnd, pid))
+    skipped = what_is_shown(hwnd, pid)
     pump(1.0)
-    settled = small(wc.capture_window(hwnd))
-    check("a click skips to the final theme at once (nothing changes afterwards)",
-          np.abs(skipped - settled).mean() < 0.5 and np.abs(mid - skipped).mean() > 1.0,
-          f"after skip {np.abs(skipped - settled).mean():.2f}, skip vs mid {np.abs(mid - skipped).mean():.2f}")
+    settled = what_is_shown(hwnd, pid)
+    check("... and nothing changes afterwards", np.abs(skipped - settled).mean() < 0.5,
+          f"{np.abs(skipped - settled).mean():.2f}")
 
     # Cancel goes back to the starting theme
     dl, dt, dr, db = win32gui.GetWindowRect(dialog)
     click(dl + (dr - dl) * 847 / 968, db - 60 * scale / 1.25)    # Cancel in the footer
     pump(5.0)
-    after_cancel = small(wc.capture_window(hwnd))
+    after_cancel = what_is_shown(hwnd, pid)
     check("Cancel closes the dialog", not win32gui.IsWindow(dialog) or not win32gui.IsWindowVisible(dialog))
     check("Cancel brings the starting theme back", np.abs(after_cancel - before).mean() < 4.0,
           f"{np.abs(after_cancel - before).mean():.2f}")
