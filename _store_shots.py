@@ -120,7 +120,8 @@ def _one(name, outdir):
     elif name == "bulk":
         sample = os.path.join(tempfile.mkdtemp(), "mosaiq-bulk-sample.csv")
         with open(sample, "w", encoding="utf-8", newline="") as fh:
-            fh.write(bulk_csv.SAMPLE_CSV)
+            # The app's sample uses the +91 98765 43210 placeholder; public pictures show a reserved fictional number.
+            fh.write(bulk_csv.SAMPLE_CSV.replace("+919876543210", "+15555550100").replace("+91 98765 43210", "+1 555 555 0100"))
         gp.design_card.apply_preset("Ocean")
         app.show_bulk_page()
         app.bulk_page.load_csv(sample)
@@ -149,7 +150,7 @@ def main():
             folder = os.path.join(appdata, "QR Code Studio")
             os.makedirs(folder)
             with open(os.path.join(folder, "settings.json"), "w", encoding="utf-8") as fh:
-                json.dump({"theme": theme, "splash_enabled": False}, fh)
+                json.dump({"theme": theme}, fh)               # everything else is a fresh install's default (intro switch on)
             env = dict(os.environ, APPDATA=appdata)
             subprocess.run([sys.executable, os.path.abspath(__file__), "--one", name, outdir],
                            env=env, check=True, timeout=180)

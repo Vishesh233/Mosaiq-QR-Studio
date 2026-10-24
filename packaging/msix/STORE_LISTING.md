@@ -19,8 +19,7 @@ the Store signs it.
 ## Pricing and availability
 
 - **Price:** Free
-- **First submission:** choose a *private audience* containing your own Microsoft account.
-  Install the Store-signed build from the Store, test it, then make the listing public.
+- **Audience:** Public (already set)
 
 ## Age rating (IARC questionnaire)
 
@@ -45,21 +44,31 @@ lowest rating (3+ / Everyone).
 
 ## Notes for certification
 
-> Desktop app, no sign-in. On launch an intro animation plays for about 9 seconds, then the
-> main window opens maximized. Generate: pick a type (URL / Text, UPI Payment, WiFi, Contact,
-> Email or SMS), fill in the small form, click "Generate QR", then choose PNG, SVG or PDF under
-> the preview and click Save (the file name is asked in the Save dialog). Scan QR: click
-> "Browse Image" and pick the saved PNG (or drag the file onto the page, or press Paste after
-> copying an image); the decoded result appears on the right. "Use Camera" needs a webcam: it
-> shows a live preview and reads a QR code held in front of it; without a camera it shows a
-> clear message instead. "Screen Region" hides the window briefly and lets you drag a box
-> around a QR code on screen. History lists the codes generated and scanned on this PC (kept
-> locally; Settings has switches to turn it off, to save WiFi passwords, which is off by
-> default, and to clear it). Bulk Create loads a CSV file (a sample can be downloaded in the
-> app) and writes the codes to a folder. Settings is a page at the bottom of the sidebar (the
-> gear in the top bar opens it too); there the theme can be changed and the intro turned off. On Windows N editions without the Media
-> Feature Pack, Generate and the rest of the app work and the Scan tab explains that the Media
-> Feature Pack is needed.
+> Version 2.2.0.0. Desktop app, no sign-in, works offline. On launch an intro plays for about 9
+> seconds (it can be turned off in Settings), then the main window opens maximized.
+>
+> Generate: pick a type (URL / Text, UPI Payment, WiFi, Contact, Email or SMS), fill in the form,
+> click "Generate QR", choose PNG, SVG or PDF under the preview and click Save.
+>
+> Scan QR: click "Browse Image" and pick the saved PNG (or drag the file onto the page, or press
+> Paste after copying an image). The first scan after launch can take a few seconds while the
+> scanner loads; "Reading the code…" is shown meanwhile. "Use Camera" needs a webcam; without one
+> it shows a clear message. "Screen Region" hides the window briefly and lets you drag a box
+> around a QR code on screen.
+>
+> History: codes generated and scanned on this PC, kept locally; Settings can switch it off or
+> clear it.
+>
+> Bulk Create: click "Download sample CSV", then "Choose CSV" with that file, then "Create".
+>
+> Settings: last item in the sidebar (or the gear in the top bar). Pick a theme and press Apply.
+>
+> On Windows N editions without the Media Feature Pack, Generate and the rest of the app work and
+> the Scan tab explains that the Media Feature Pack is needed.
+>
+> The previous submission (2.1.0.0) failed 10.3.4 with Store error 0x80244007, a Store-side
+> download error. This package installs and launches cleanly in our local install test and passes
+> WACK.
 
 ## Store listing (English, United States)
 
@@ -122,12 +131,13 @@ needed.
 ### What's new in this version
 
 A redesigned, calmer layout: numbered Content and Design steps, a live preview that stays in view
-and a clearer Scan page. Style your codes with colour presets, a built-in colour picker, round
-or dotted modules, round eyes, gradients and a logo size slider, and let the test scan check
-that the result still reads. Save as PNG, SVG or PDF; the file name is now asked in the Save
-dialog. New History page for generated and scanned codes (local only, can be switched off and
-cleared; WiFi passwords are not saved by default) and a new Bulk Create page for making up to
-1000 codes from a CSV file. The window now always opens on screen. Also in this release:
+and a clearer Scan page. Style your codes with colour presets, a built-in colour picker, round or
+dotted modules, round eyes, gradients and a logo size slider, and let the test scan check that the
+result still reads. Save as PNG, SVG or PDF; the file name is now asked in the Save dialog. New
+History page for generated and scanned codes (local only, can be switched off and cleared; WiFi
+passwords are not saved by default) and a new Bulk Create page for making up to 1000 codes from a
+CSV file. Settings is now a page with Apply and Cancel, and themes change with a liquid ink
+transition (can be switched off). The window now always opens on screen. Also in this release:
 webcam, clipboard, screen-region and drag-and-drop scanning, UPI, WiFi, contact, email and SMS
 forms, and better reading of dark-mode, dotted and blurred codes.
 
@@ -143,13 +153,17 @@ QR code · QR generator · QR scanner · QR code maker · bulk QR code · QR cod
 
 | File | Caption |
 |---|---|
-| `assets/images/generate.png` | Make a code from a link, UPI, WiFi, contact, email or SMS, with a live preview that stays in view |
-| `assets/images/style.png` | Colour presets, dots, gradients and your logo, with a test scan that checks the result |
-| `assets/images/scan.png` | Scan a QR code from an image, the clipboard, your screen or your webcam |
-| `assets/images/history.png` | History of generated and scanned codes, kept only on your PC |
-| `assets/images/bulk.png` | Bulk Create: turn a CSV file into up to 1000 QR codes |
-| `assets/images/theme_settings.png` | Eight themes with live preview, plus history and privacy switches |
-| `assets/images/light_mode.png` | The light Daylight theme |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\generate.png` | Make a code from a link, UPI, WiFi, contact, email or SMS, with a live preview that stays in view |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\style.png` | Colour presets, dots, gradients and your logo, with a test scan that checks the result |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\scan.png` | Scan a QR code from an image, the clipboard, your screen or your webcam |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\history.png` | History of generated and scanned codes, kept only on your PC |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\bulk.png` | Bulk Create: turn a CSV file into up to 1000 QR codes |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\theme_settings.png` | Eight themes with live preview and a liquid ink transition, plus history and privacy switches |
+| `D:\Codes\qr code\mosaiq-review\store-screenshots-2.2\light_mode.png` | The light Daylight theme |
+
+The same seven pictures are also in `assets/images` (the README uses them). That folder is not part of the
+app or the MSIX, so they are not bundled. They were made from the final UI by `_store_shots.py`: the app
+window only (PrintWindow), a throw-away settings folder, sample data only (no real UPI ID or phone number).
 
 The package already contains the app's logos (rendered by `make_assets.py`), so the
 optional Store logo uploads can be skipped.
