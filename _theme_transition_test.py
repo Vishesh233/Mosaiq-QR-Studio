@@ -277,7 +277,9 @@ def test_on_screen():
           f"{(box[0].winfo_rootx(), box[0].winfo_rooty())} vs {(root.winfo_rootx(), root.winfo_rooty())}")
     difference = np.abs(np.asarray(snap.renderer.old).astype(int) - np.asarray(snap.renderer.new).astype(int)).mean()
     check("the 'after' snapshot is the new theme, not the overlay (they differ)", difference > 3, f"{difference:.1f}")
-    settle(0.35)
+    waited = time.time()
+    while manager._frames < 3 and manager.running and time.time() - waited < 1.2:      # a busy PC may need a moment
+        settle(0.05)
     check("frames are being shown and the window keeps answering", manager._frames >= 3, f"{manager._frames} frames")
 
     # --- a click skips to the end ---
@@ -360,13 +362,20 @@ def test_on_screen():
     def focus_out():
         root.event_generate("<FocusOut>")
 
-    manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
-    settle(0.12)                                              # the skip handlers are attached by now
     root.focus_displayof = lambda: None
     tt.another_program_has_focus = lambda: True               # the user really is in another program ...
-    focus_out()
-    settle(0.12)                                              # ... but this is within the first 300 ms
-    check("a focus change in the first 300 ms is ignored", manager.running)
+    ignored = None
+    for _attempt in range(5):                                 # ... but this is within the first 300 ms:
+        manager.run(lambda: (ThemeManager.set_theme("Ultraviolet", persist=False), app.refresh_theme()))
+        while manager.running and not manager._overlays[0].bindings:      # wait for the skip handlers (80 ms)
+            settle(0.01)
+        if manager.running and time.perf_counter() - manager._started < 0.25:   # a slow machine may be past it: retry
+            focus_out()
+            settle(0.1)
+            ignored = manager.running
+            break
+        manager.finish()
+    check("a focus change in the first 300 ms is ignored", ignored is True, str(ignored))
     settle(0.3)
     focus_out()                                               # later: the same event ends it
     settle(0.3)
