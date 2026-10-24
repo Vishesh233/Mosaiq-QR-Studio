@@ -26,7 +26,6 @@ class ScanResultCard(SectionCard):
         self.field_rows = []
         self._masked = []          # [(value label, real value)] for secret fields
 
-        self.status_dot = self.badge
         self.build_ui()
 
     # ==================================================
@@ -187,7 +186,7 @@ class ScanResultCard(SectionCard):
         self.result_box.configure(
             border_color=theme["primary"] if (is_url or smart) else theme["border"]
         )
-        self.status_dot.configure(fg_color=theme["success"])
+        self.status_dot.set_active(True)
 
         if is_url:
             self.result_label.bind("<Button-1>", self.open_result)
@@ -222,7 +221,7 @@ class ScanResultCard(SectionCard):
         )
 
         self.result_box.configure(border_color=theme["danger"])
-        self.status_dot.configure(fg_color=theme["danger"])
+        self.status_dot.set_active(False)          # nothing decoded: the dot stays dim
 
     # ==================================================
 
@@ -397,7 +396,7 @@ class ScanResultCard(SectionCard):
         )
 
         self.result_box.configure(border_color=theme["border"])
-        self.status_dot.configure(fg_color=theme["text_muted"])
+        self.status_dot.set_active(False)
 
         self._set_buttons([])
 
@@ -457,5 +456,4 @@ class ScanResultCard(SectionCard):
             text_color=theme["danger"] if error else theme["text_secondary"])
         self.result_label.configure(text_color=theme["text_secondary"])
         self.result_box.configure(border_color=theme["danger"] if error else theme["border"])
-        self.status_dot.configure(
-            fg_color=theme["danger"] if error else theme["text_muted"])
+        self.status_dot.set_active(False)

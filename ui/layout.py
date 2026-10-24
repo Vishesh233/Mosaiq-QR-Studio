@@ -5,6 +5,7 @@ the subtitle and the cards start on the same x and the spacing is the same every
 """
 import customtkinter as ctk
 
+from ui.widgets import StatusDot
 from utils.theme_manager import ThemeManager
 
 # ---- the 8 px grid -------------------------------------------------------
@@ -84,6 +85,8 @@ class SectionCard(Card):
         head.pack(fill="x", padx=CARD_PAD, pady=(CARD_PAD, GRID + 4))
 
         self.badge = None
+        self._step_badge = None
+        self.status_dot = None          # set_active(True) when the card holds a result
         if step is not None:
             self.badge = ctk.CTkLabel(
                 head, text=str(step), width=22, height=22, corner_radius=7,
@@ -91,10 +94,10 @@ class SectionCard(Card):
                 font=("Segoe UI Semibold", 12),
             )
             self.badge.pack(side="left", padx=(0, GRID))
+            self._step_badge = self.badge
         elif dot:
-            self.badge = ctk.CTkFrame(head, width=10, height=10, corner_radius=5,
-                                      fg_color=theme["primary"])
-            self.badge.pack(side="left", padx=(2, GRID + 2))
+            self.status_dot = StatusDot(head)
+            self.status_dot.pack(side="left", padx=(0, 4))
 
         self.title_label = ctk.CTkLabel(
             head, text=title, font=("Segoe UI Semibold", 15), text_color=theme["text"],
@@ -108,10 +111,10 @@ class SectionCard(Card):
         super().refresh_theme()
         theme = ThemeManager.get_theme()
         self.title_label.configure(text_color=theme["text"])
-        if isinstance(self.badge, ctk.CTkLabel):
-            self.badge.configure(fg_color=theme["segment_hover"], text_color=theme["primary"])
-        elif self.badge is not None:
-            self.badge.configure(fg_color=theme["primary"])
+        if self._step_badge is not None:
+            self._step_badge.configure(fg_color=theme["segment_hover"], text_color=theme["primary"])
+        if self.status_dot is not None:
+            self.status_dot.refresh_theme()
 
 
 class TwoColumnPage(ctk.CTkFrame):

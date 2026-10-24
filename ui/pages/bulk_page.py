@@ -364,6 +364,7 @@ class BulkPage(TwoColumnPage):
             text=f"Look: {look}{', with your logo' if logo else ''}. It comes from the Generate page; "
                  f"change it there.")
         running = self.job is not None and self.job.running
+        self.summary.status_dot.set_active(ok > 0)
         if not self.rows:
             self.counts.configure(text="No file loaded")
             self.detail.configure(text="Choose a CSV to see how many codes it makes.")

@@ -130,6 +130,7 @@ class GeneratePage(TwoColumnPage):
         try:
             data = self.content_card.get_content()
         except ValueError as e:
+            self.preview_card.status_dot.set_active(False)      # the preview no longer matches the input
             messagebox.showwarning("Check Your Details", str(e))
             return
 
@@ -139,6 +140,7 @@ class GeneratePage(TwoColumnPage):
 
         except Exception as e:
 
+            self.preview_card.status_dot.set_active(False)
             messagebox.showerror(
                 "QR Generation Failed",
                 str(e)

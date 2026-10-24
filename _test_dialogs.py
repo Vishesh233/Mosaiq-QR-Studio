@@ -9,6 +9,8 @@ A message box or file dialog that really opens blocks the test until somebody cl
 
   * file dialogs answer "cancelled" (empty string) unless a test sets ``answers``
   * ``askyesno`` and friends answer "no" unless a test sets ``answers``
+  * the Settings dialog's "Save changes?" answers "cancel" unless ``answers["save_changes"]``
+    is "save" or "discard"
   * every call is kept in ``calls`` as (kind, title, message)
 
 An error or warning box that nobody expected makes the test fail when it ends: the app showed
@@ -100,11 +102,24 @@ def _without_taskbar_button():
     customtkinter.CTk.__init__ = init
 
 
+def _save_changes_question():
+    """The Settings dialog's own "Save changes?" window (not a tkinter message box)."""
+    from ui.dialogs import settings_dialog
+
+    def fake(parent):
+        calls.append(("save_changes", "Save changes?", None))
+        answer = answers.get("save_changes", "cancel")
+        return answer(parent) if callable(answer) else answer
+
+    settings_dialog.ask_save_changes = fake
+
+
 def install():
     """Replace the dialogs (once per process); returns this module for ``calls`` / ``answers``."""
     global _installed
     if not _installed:
         _without_taskbar_button()
+        _save_changes_question()
         for name in _BOXES:
             setattr(messagebox, name, _box(name))
         for name in _FILE_DIALOGS:

@@ -320,3 +320,170 @@ class DashedZone(ctk.CTkFrame):
             self.canvas.configure(cursor="hand2")
         except Exception:
             pass
+
+
+class StatusDot(tkinter.Canvas):
+    """The small dot in front of a card title: dim while the card is empty, bright with a soft
+    glow ring once it holds a result. The change fades in over about 180 ms.
+
+    ``set_active(True/False)``; ``active`` tells the current state. A plain Canvas, so a state
+    change redraws two circles and costs nothing noticeable.
+    """
+
+    SIZE = 20            # logical px
+    CORE = 4.5           # radius of the dot
+    RING = 9.0           # radius of the glow
+    RING_STRENGTH = 0.30  # how much of the bright colour the ring shows at full glow
+    STEPS = 6
+    STEP_MS = 30
+
+    def __init__(self, parent):
+        theme = ThemeManager.get_theme()
+        self._scale = self._scaling_of(parent)
+        side = round(self.SIZE * self._scale)
+        super().__init__(parent, width=side, height=side, bg=theme["card"],
+                         highlightthickness=0, bd=0)
+        self.active = False
+        self._level = 0.0            # 0 = dim, 1 = bright (moves during the fade)
+        self._job = None
+        self._draw()
+
+    @staticmethod
+    def _scaling_of(widget):
+        top = widget.winfo_toplevel()
+        return top._get_window_scaling() if hasattr(top, "_get_window_scaling") else 1.0
+
+    # ------------------------------------------------------------------ colours
+
+    @staticmethod
+    def colours(theme):
+        """(dim, bright, surface) for a theme dictionary."""
+        return theme["text_muted"], theme["success"], theme["card"]
+
+    def current_colours(self):
+        """(dot colour, ring colour or None) for the level being shown."""
+        from utils import colors
+        dim, bright, surface = self.colours(ThemeManager.get_theme())
+        dot = colors.blend(dim, bright, self._level)
+        ring = colors.blend(surface, bright, self.RING_STRENGTH * self._level) if self._level > 0.02 else None
+        return dot, ring
+
+    # ------------------------------------------------------------------ drawing
+
+    def _draw(self):
+        self.delete("all")
+        dot, ring = self.current_colours()
+        centre = self.SIZE * self._scale / 2
+        if ring:
+            r = self.RING * self._scale
+            self.create_oval(centre - r, centre - r, centre + r, centre + r, fill=ring, outline="")
+        r = self.CORE * self._scale
+        self.create_oval(centre - r, centre - r, centre + r, centre + r, fill=dot, outline="")
+
+    def set_active(self, active):
+        """Bright with glow (a result is showing) or dim (empty, cleared, invalid)."""
+        active = bool(active)
+        if active == self.active and self._job is None:
+            return
+        self.active = active
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+        if not self.winfo_ismapped():            # nothing to watch: no animation needed
+            self._level = 1.0 if active else 0.0
+            self._draw()
+            return
+        self._fade()
+
+    def _fade(self):
+        target = 1.0 if self.active else 0.0
+        step = 1.0 / self.STEPS
+        if abs(self._level - target) <= step / 2:
+            self._level = target
+            self._job = None
+        else:
+            self._level += step if target > self._level else -step
+            self._job = self.after(self.STEP_MS, self._fade)
+        self._draw()
+
+    def refresh_theme(self):
+        """Follow a theme change (a Canvas is not recoloured by the generic theme pass)."""
+        self._scale = self._scaling_of(self)
+        side = round(self.SIZE * self._scale)
+        self.configure(width=side, height=side, bg=ThemeManager.get_theme()["card"])
+        self._draw()
+
+
+class ThemeDot(tkinter.Canvas):
+    """The dot in front of the theme name in the sidebar footer: the theme's accent colour with
+    a soft glow. When the theme changes it blends from the old colour to the new one while a
+    ring spreads out and fades (about 350 ms)."""
+
+    SIZE = 24            # logical px
+    CORE = 4.5
+    RING = 8.5
+    RING_STRENGTH = 0.30
+    PULSE_STRENGTH = 0.50
+    STEPS = 10
+    STEP_MS = 35
+
+    def __init__(self, parent):
+        theme = ThemeManager.get_theme()
+        self._scale = StatusDot._scaling_of(parent)
+        side = round(self.SIZE * self._scale)
+        super().__init__(parent, width=side, height=side, bg=theme["navbar"],
+                         highlightthickness=0, bd=0)
+        self._from = theme["primary"]
+        self._to = theme["primary"]
+        self._t = 1.0
+        self._job = None
+        self._draw()
+
+    def _draw(self):
+        from utils import colors
+        theme = ThemeManager.get_theme()
+        surface = theme["navbar"]
+        colour = colors.blend(self._from, self._to, self._t)
+        centre = self.SIZE * self._scale / 2
+        s = self._scale
+        if self._t < 1.0:                                   # the spreading, fading ring
+            radius = (self.CORE + (self.SIZE / 2 - self.CORE) * self._t) * s
+            tint = colors.blend(surface, self._to, self.PULSE_STRENGTH * (1 - self._t))
+            self.delete("all")
+            self.create_oval(centre - radius, centre - radius, centre + radius, centre + radius,
+                             fill=tint, outline="")
+        else:
+            self.delete("all")
+        ring = colors.blend(surface, colour, self.RING_STRENGTH)
+        self.create_oval(centre - self.RING * s, centre - self.RING * s,
+                         centre + self.RING * s, centre + self.RING * s, fill=ring, outline="")
+        self.create_oval(centre - self.CORE * s, centre - self.CORE * s,
+                         centre + self.CORE * s, centre + self.CORE * s, fill=colour, outline="")
+
+    def refresh_theme(self):
+        """Show the active theme's colours, animated when the dot is on screen."""
+        from utils import colors
+        theme = ThemeManager.get_theme()
+        self._scale = StatusDot._scaling_of(self)
+        side = round(self.SIZE * self._scale)
+        self.configure(width=side, height=side, bg=theme["navbar"])
+        shown = colors.blend(self._from, self._to, self._t)
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+        self._from, self._to = shown, theme["primary"]
+        if shown.upper() == theme["primary"].upper() or not self.winfo_ismapped():
+            self._from, self._t = self._to, 1.0
+            self._draw()
+            return
+        self._t = 0.0
+        self._step()
+
+    def _step(self):
+        self._t = min(1.0, self._t + 1.0 / self.STEPS)
+        self._draw()
+        if self._t < 1.0:
+            self._job = self.after(self.STEP_MS, self._step)
+        else:
+            self._job = None
+            self._from = self._to

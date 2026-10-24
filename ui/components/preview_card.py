@@ -146,6 +146,7 @@ class PreviewCard(SectionCard):
         """
 
         self.placeholder.place_forget()
+        self.status_dot.set_active(True)
 
         # PNG saves this same image, so this is the saved PNG's size.
         self._pixels = image.width
@@ -212,6 +213,7 @@ class PreviewCard(SectionCard):
         self._pixels = None
         self._refresh_facts()
         self.set_badge(None)
+        self.status_dot.set_active(False)
 
         self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
 

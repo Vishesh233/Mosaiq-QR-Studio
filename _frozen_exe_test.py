@@ -182,8 +182,13 @@ def main():
         check("overlay is gone", overlay() is None)
 
         # ---- the crop that came back: read it from the exe window itself ----
-        shot = wc.capture_window(hwnd)
-        decoded = QRScanner.decode_image(shot.crop((350, 230, width - 540, 660)))
+        decoded = None
+        for attempt in range(5):                           # the picture may still be painting
+            shot = wc.capture_window(hwnd)
+            decoded = QRScanner.decode_image(shot.crop((350, 230, width - 540, 660)))
+            if decoded == text:
+                break
+            pump(1.0)
         check("the preview in the exe holds the whole QR (it decodes)", decoded == text, repr(decoded))
 
         # ---- the exe's own result: press "Copy password" and read the clipboard ----

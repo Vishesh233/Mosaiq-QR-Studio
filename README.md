@@ -37,7 +37,7 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
 - Eight themes with live preview: Midnight, Graphite, AMOLED, Aqua Mint, Ultraviolet, Ember, Emerald and the light Daylight
-- Remembers your theme and intro preference
+- Settings has an Apply / Cancel footer: themes preview live, **Apply** saves everything, **Cancel** goes back, and closing with X asks whether to save; the saved theme is used on the next start
 - Works fully offline; nothing is collected or sent ([privacy policy](PRIVACY.md))
 
 ## Screenshots
@@ -81,6 +81,9 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_history_test.py`, `_history_ui_test.py` | the history store and the History page, WiFi privacy (every saved preview is decoded to prove no password), Settings switches |
 | `_bulk_test.py`, `_bulk_ui_test.py` | CSV reading and per-row errors, the 1000-row limit, file names, the worker, Cancel, formats, progress without a frozen window |
 | `_theme_contrast_test.py` | contrast of every theme and every widget, live theme switching |
+| `_settings_persist_test.py` | Settings: Apply writes every setting atomically, Cancel and "Don't save" write nothing, X asks "Save changes?", a failed write is reported, the next launch uses the saved theme, the footer is always visible |
+| `_status_dot_test.py` | the card status dot (dim, then bright with a glow once there is a result) on every page, the fade, and the sidebar's theme dot in every theme |
+| `_defaults_test.py` | a fresh install: intro animation on, history on, WiFi passwords off |
 | `_window_visible_test.py` | the window is on a monitor after start-up, even from an off-screen position |
 | `_region_test.py` | screen-region overlay, crop mapping, window restore |
 | `_camera_test.py` | webcam thread, fake and real camera, release on stop, tab change and exit |

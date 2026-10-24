@@ -275,6 +275,7 @@ class HistoryPage(TwoColumnPage):
     def _show_details(self):
         entry = self.selected_entry()
         has = entry is not None
+        self.details.status_dot.set_active(has)
         for button in (self.open_btn, self.copy_btn, self.regen_btn, self.delete_btn):
             button.configure(state="normal" if has else "disabled")
         self.detail_note.configure(text="")

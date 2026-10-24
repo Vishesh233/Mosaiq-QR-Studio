@@ -88,6 +88,38 @@ def check_tokens(problems, report=False):
                     print(f"{name:12s} {fg:15s} on {bg:14s} {r:5.2f}  (need {minimum})")
                 if r < minimum:
                     problems.append(f"{name}: {what}: {fg} {t[fg]} on {bg} {t[bg]} = {r:.2f} < {minimum}")
+        check_status_dot(name, t, problems, report)
+
+
+def check_status_dot(name, t, problems, report=False):
+    """The card status dot: dim must be visible, bright clearly different from dim, and the
+    glow ring visible around the bright dot (see ui.widgets.StatusDot)."""
+    import math
+
+    from ui.widgets import StatusDot
+    from utils import colors
+
+    dim, bright, surface = StatusDot.colours(t)
+    ring = colors.blend(surface, bright, StatusDot.RING_STRENGTH)
+    dim_on_card = ratio(dim, surface)
+    bright_on_card = ratio(bright, surface)
+    bright_vs_dim = ratio(bright, dim)
+    apart = math.dist(colors.hex_to_rgb(bright), colors.hex_to_rgb(dim))
+    ring_apart = math.dist(colors.hex_to_rgb(ring), colors.hex_to_rgb(surface))
+    if report:
+        print(f"{name:12s} status dot: dim {dim_on_card:.2f}, bright {bright_on_card:.2f}, "
+              f"bright/dim {bright_vs_dim:.2f} (distance {apart:.0f}), ring {ring_apart:.0f}")
+    if dim_on_card < 3.0:
+        problems.append(f"{name}: status dot dim state hard to see ({dim_on_card:.2f} < 3.0 on the card)")
+    if bright_on_card < 4.5:
+        problems.append(f"{name}: status dot bright state weak ({bright_on_card:.2f} < 4.5 on the card)")
+    if bright_vs_dim < 1.3 or apart < 80:
+        problems.append(f"{name}: status dot bright and dim look alike (ratio {bright_vs_dim:.2f}, distance {apart:.0f})")
+    if ring_apart < 40:
+        problems.append(f"{name}: status dot glow ring not visible (distance {ring_apart:.0f} < 40)")
+    # the sidebar's theme dot: accent on the navbar
+    if ratio(t["primary"], t["navbar"]) < 3.0:
+        problems.append(f"{name}: sidebar theme dot (primary on navbar) = {ratio(t['primary'], t['navbar']):.2f} < 3.0")
 
 
 def _resolve(value, mode):

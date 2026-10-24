@@ -8,12 +8,67 @@ from ui.layout import autohide_scrollbar, restyle_scrollable
 from ui.brand_logo import apply_window_icon
 
 
-class SettingsDialog(ctk.CTkToplevel):
-    """Appearance settings: a live theme gallery and the intro preference.
+def dialog_size(screen_width, screen_height, scaling):
+    """(width, height) in logical px that fits a screen of ``screen_*`` physical px at ``scaling``
+    (1.25 = 125 %), leaving room for the title bar and the taskbar. The Apply / Cancel footer is
+    packed first, so it stays visible however small the dialog is."""
+    width = max(520, min(760, int(screen_width / scaling) - 60))
+    height = max(420, min(990, int(screen_height / scaling) - 130))
+    return width, height
 
-    Clicking a theme tile previews it on the whole app immediately; Apply keeps
-    it (and remembers it for the next launch), Cancel or closing the window
-    restores the theme that was active when the dialog opened.
+
+def ask_save_changes(parent):
+    """"Save changes?" with [Save] [Don't save] [Cancel]. Returns "save", "discard" or "cancel"."""
+    theme = ThemeManager.get_theme()
+    box = ctk.CTkToplevel(parent)
+    box.title("Settings")
+    apply_window_icon(box)
+    box.configure(fg_color=theme["background"])
+    box.resizable(False, False)
+    box.transient(parent)
+    answer = {"value": "cancel"}
+
+    def choose(value):
+        answer["value"] = value
+        box.destroy()
+
+    ctk.CTkLabel(box, text="Save changes?", font=("Segoe UI Semibold", 17),
+                 text_color=theme["text"]).pack(anchor="w", padx=26, pady=(24, 4))
+    ctk.CTkLabel(box, text="You changed some settings. Save them before closing?",
+                 font=("Segoe UI", 13), text_color=theme["text_secondary"],
+                 wraplength=380, justify="left").pack(anchor="w", padx=26)
+    row = ctk.CTkFrame(box, fg_color="transparent")
+    row.pack(fill="x", padx=26, pady=(22, 22))
+    ctk.CTkButton(row, text="Save", width=110, height=38, corner_radius=10,
+                  fg_color=theme["primary"], hover_color=theme["primary_hover"],
+                  text_color=theme["on_primary"], font=("Segoe UI Semibold", 13),
+                  command=lambda: choose("save")).pack(side="right")
+    ctk.CTkButton(row, text="Don't save", width=110, height=38, corner_radius=10,
+                  fg_color="transparent", border_width=1, border_color=theme["border"],
+                  hover_color=theme["card_hover"], text_color=theme["text"],
+                  command=lambda: choose("discard")).pack(side="right", padx=(0, 10))
+    ctk.CTkButton(row, text="Cancel", width=90, height=38, corner_radius=10,
+                  fg_color="transparent", border_width=1, border_color=theme["border"],
+                  hover_color=theme["card_hover"], text_color=theme["text"],
+                  command=lambda: choose("cancel")).pack(side="right", padx=(0, 10))
+    box.protocol("WM_DELETE_WINDOW", lambda: choose("cancel"))
+    box.bind("<Escape>", lambda _e: choose("cancel"))
+    box.update_idletasks()
+    box.geometry(f"{max(box.winfo_reqwidth(), 440)}x{box.winfo_reqheight()}")
+    box.after(50, box.grab_set)
+    parent.wait_window(box)
+    return answer["value"]
+
+
+class SettingsDialog(ctk.CTkToplevel):
+    """Settings: a live theme gallery, the intro preference and the history switches.
+
+    Clicking a theme tile previews it on the whole app immediately (nothing is written yet).
+
+    * **Apply** writes every setting to settings.json in one atomic write and closes.
+    * **Cancel** returns to what the dialog showed when it opened (the theme too) and writes nothing.
+    * Closing with **X** asks "Save changes?" when something was changed, and closes straight away
+      when nothing was; it never reverts silently.
     """
 
     TILE_COLUMNS = 4
@@ -28,14 +83,16 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self.title("Settings")
         apply_window_icon(self)
-        height = min(990, max(520, self.winfo_screenheight() - 140))
-        self.geometry(f"760x{height}")
+        width, height = dialog_size(self.winfo_screenwidth(), self.winfo_screenheight(),
+                                    self._get_window_scaling())
+        self.geometry(f"{width}x{height}")
         self.resizable(False, False)
 
         # Modal behaviour + clean focus return to the parent window.
         self.transient(parent)
         self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.protocol("WM_DELETE_WINDOW", self.close_requested)
+        self.bind("<Escape>", lambda _e: self.close_requested())
 
         self.splash_var = ctk.BooleanVar(
             value=bool(settings_store.get("splash_enabled", True))
@@ -43,6 +100,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self.history_var = ctk.BooleanVar(value=history_store.enabled())
         self.wifi_var = ctk.BooleanVar(value=history_store.save_wifi_passwords())
+        self._saved = self.values()          # what the dialog showed when it opened
 
         self._build_ui()
         self._refresh_selection()
@@ -72,8 +130,9 @@ class SettingsDialog(ctk.CTkToplevel):
         self.container.pack(fill="both", expand=True)
 
         # Bottom buttons first so they stay visible; everything else scrolls above them.
-        button_frame = ctk.CTkFrame(self.container, fg_color="transparent")
-        button_frame.pack(side="bottom", fill="x", padx=30, pady=(8, 20))
+        self.footer = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.footer.pack(side="bottom", fill="x", padx=30, pady=(8, 20))
+        button_frame = self.footer
         self.body = ctk.CTkScrollableFrame(
             self.container, fg_color="transparent", corner_radius=0,
             scrollbar_button_color=theme["scrollbar"],
@@ -348,18 +407,47 @@ class SettingsDialog(ctk.CTkToplevel):
         except Exception:
             pass
 
+    def values(self):
+        """Every setting this dialog edits, as it stands now (the keys of settings.json)."""
+        return {
+            "theme": self._selected,
+            "splash_enabled": bool(self.splash_var.get()),
+            history_store.KEY_ENABLED: bool(self.history_var.get()),
+            history_store.KEY_WIFI_PASSWORDS: bool(self.wifi_var.get()),
+        }
+
+    def has_changes(self):
+        return self.values() != self._saved
+
     def apply(self):
-        ThemeManager.set_theme(self._selected)
-        settings_store.set("splash_enabled", bool(self.splash_var.get()))
-        history_store.set_enabled(self.history_var.get())
-        history_store.set_save_wifi_passwords(self.wifi_var.get())
+        """Write all settings (one atomic write) and close. A failed write is shown and the dialog
+        stays open with the choices intact. Returns True when saved."""
+        try:
+            settings_store.update(self.values())
+        except settings_store.SettingsWriteError as e:
+            messagebox.showerror("Could not save settings", str(e))
+            return False
+        ThemeManager.set_theme(self._selected, persist=False)       # already on disk
         app = self._find_app()
         if app is not None and hasattr(app, "history_page"):
             app.history_page.refresh()
         self.destroy()
+        return True
 
     def cancel(self):
+        """Back to what was set when the dialog opened (the theme too). Writes nothing."""
         if ThemeManager.get_current_theme() != self._original_theme:
             self._apply_live(self._original_theme)
-        ThemeManager.set_theme(self._original_theme)
         self.destroy()
+
+    def close_requested(self):
+        """The X button (or Escape): ask only if something changed."""
+        if not self.has_changes():
+            self.cancel()
+            return
+        choice = ask_save_changes(self)
+        if choice == "save":
+            self.apply()
+        elif choice == "discard":
+            self.cancel()
+        # "cancel": stay in the dialog

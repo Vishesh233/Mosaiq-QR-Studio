@@ -165,6 +165,7 @@ def main():
     check("the intro has closed", not intro_windows(hwnd, pid))
     pump(3)
     win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+    pump(1.0)                                              # let it come to the front before the first click
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     width, height = right - left, bottom - top
     check("the window is on screen", left < 100 and top < 100 and right > 600 and bottom > 400,
@@ -172,14 +173,19 @@ def main():
     check("the window is maximized", win32gui.GetWindowPlacement(hwnd)[1] == win32con.SW_SHOWMAXIMIZED)
 
     # ---- Generate: paste a link into the first field and press Generate QR ----
-    set_clipboard_text(URL)
-    click(left + 700, top + 415)
-    ctrl("V")
-    click(left + width - 280, top + height - 142)          # Generate QR
-    pump(3)
-    shot = wc.capture_window(hwnd)
-    preview = shot.crop((width - 520, 200, width - 40, 800))
-    decoded = QRScanner.decode_image(preview.convert("RGB"))
+    decoded = None
+    for attempt in range(3):                               # the first click can be eaten while focus moves
+        set_clipboard_text(URL)
+        click(left + 700, top + 415)
+        ctrl("A")
+        ctrl("V")
+        click(left + width - 280, top + height - 142)      # Generate QR
+        pump(3)
+        shot = wc.capture_window(hwnd)
+        preview = shot.crop((width - 520, 200, width - 40, 800))
+        decoded = QRScanner.decode_image(preview.convert("RGB"))
+        if decoded == URL:
+            break
     check("Generate: the preview holds a QR code that decodes to the typed link", decoded == URL, repr(decoded))
 
     # ---- Scan: paste a picture of another code and read it ----

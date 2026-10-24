@@ -11,6 +11,7 @@ from utils.theme_manager import ThemeManager
 from ui import icons
 from ui.brand_logo import logo_ctk_image
 from ui.line_icons import line_icon
+from ui.widgets import ThemeDot
 
 
 class Sidebar(ctk.CTkFrame):
@@ -105,10 +106,8 @@ class Sidebar(ctk.CTkFrame):
         footer.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 16))
         footer.grid_columnconfigure(1, weight=1)
 
-        self._theme_dot = ctk.CTkFrame(
-            footer, width=10, height=10, corner_radius=5, fg_color=theme["primary"],
-        )
-        self._theme_dot.grid(row=0, column=0, padx=(0, 8))
+        self._theme_dot = ThemeDot(footer)
+        self._theme_dot.grid(row=0, column=0, padx=(0, 4))
         self._theme_name_label = ctk.CTkLabel(
             footer, text=ThemeManager.get_current_theme(),
             font=("Segoe UI", 11), text_color=theme["text_secondary"],
@@ -204,9 +203,9 @@ class Sidebar(ctk.CTkFrame):
         self._brand_sub.configure(text_color=theme["text_secondary"])
         self._section_label.configure(text_color=theme["text_secondary"])
         self._footer_sep.configure(fg_color=theme["border"])
-        self._theme_dot.configure(fg_color=theme["primary"])
         self._theme_name_label.configure(
             text=ThemeManager.get_current_theme(), text_color=theme["text_secondary"])
+        self._theme_dot.refresh_theme()          # blends to the new colour with a spreading ring
         self._settings_link.configure(
             hover_color=theme["card_hover"], text_color=theme["text_secondary"])
         self._refresh_active()
