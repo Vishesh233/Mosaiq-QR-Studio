@@ -35,7 +35,7 @@ Imported at runtime:
 ### Important: QR scanning does NOT need ZBar / libzbar
 
 `utils/qr_scanner.py` uses **`cv2.QRCodeDetector()`** (OpenCV's built-in decoder).
-`pyzbar` is listed in `requirements.txt` but is **never imported anywhere** in the code,
+`pyzbar` is not in `requirements.txt` and is **never imported anywhere** in the code,
 and the scanner was verified to work without it. The spec therefore **excludes `pyzbar`**,
 so **no external ZBar DLL (`libzbar-64.dll`) is required** for the packaged app.
 (If you ever add a `pyzbar`-based scanner, you must then bundle `libzbar-64.dll` — see §6.)

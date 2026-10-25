@@ -1,9 +1,24 @@
 # Mosaiq QR Studio
 
-![Mosaiq QR Studio](assets/thumbnail/qr-studio-splash-1920x1080.png)
+[![Get it from Microsoft](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/9N8FWDL6NF60)
 
-A Windows desktop app for making, styling, scanning and bulk-creating QR codes, with a cinematic intro and eight themes.
-Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
+Make, style, scan and bulk-create QR codes on Windows. Free, offline, no account.
+
+![Theme transition](docs/design/theme-transition.gif)
+
+### Highlights
+
+- Styled QR codes for links, UPI, WiFi, contacts, email and SMS, with a test scan that checks they still read
+- Export PNG, SVG or PDF; Bulk Create makes up to 1000 codes from a CSV
+- Scan from webcam, image files, clipboard or any part of the screen
+- Eight themes with a liquid ink theme transition
+- Fully offline; history stays on your PC and WiFi passwords are not saved by default
+
+Formerly *QR Code Studio v2*. Current version: 2.2.
+
+## Download
+
+[Get it on the Microsoft Store](https://apps.microsoft.com/detail/9N8FWDL6NF60). Requires Windows 10 version 1809 or later, 64-bit.
 
 ## Features
 
@@ -37,11 +52,13 @@ Formerly *QR Code Studio v2*. Coming to the Microsoft Store.
 ### Look and feel
 - Full-screen animated intro in three palettes: Aqua Mint, Ultraviolet, Ember (can be turned off in Settings)
 - Eight themes with live preview: Midnight, Graphite, AMOLED, Aqua Mint, Ultraviolet, Ember, Emerald and the light Daylight
-- A **liquid ink transition** (three blobs, droplets, a glowing edge; 2 s, click or key skips it) plays over the whole window (the Settings page included) when the theme changes. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up. ![Theme transition](docs/design/theme-transition.gif)
+- A **liquid ink transition** (three blobs, droplets, a glowing edge; 2 s, click or key skips it) plays over the whole window (the Settings page included) when the theme changes. It is switched off by *Animate theme changes* in Settings and by Windows' "Animation effects" setting, and never runs at start-up.
 - **Settings is a page of the main window** (the last entry of the sidebar, or the gear in the header), so the transition covers all of it. Themes preview live, the Apply / Cancel footer is always visible, **Apply** saves everything, **Cancel** goes back, and leaving the page or closing the app with unsaved changes asks *Save changes?*; the saved theme is used on the next start. Every theme change is noted in `mosaiq.log` (started, finished, or why it was skipped)
 - Works fully offline; nothing is collected or sent ([privacy policy](PRIVACY.md))
 
 ## Screenshots
+
+![Mosaiq QR Studio](assets/thumbnail/qr-studio-splash-1920x1080.png)
 
 | Generate | Style |
 |---|---|
@@ -69,7 +86,7 @@ To skip the intro, run `main.py --no-splash` or set `QRSTUDIO_NO_SPLASH=1`.
 
 ## Tests
 
-Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe _run_all_tests.py` runs everything (`--skip-desktop` leaves out the webcam, screen-region and drag-and-drop tests, which use the real desktop; the drag-and-drop test moves the mouse by itself for a few seconds). Tests open their windows off-screen and never show a real message box or file dialog: dialogs are replaced by recorders, and an unexpected error box fails the test. A test that leaves a process running fails too.
+Run from the repository root with the venv's Python. There are 26 test scripts (`_*_test.py`); `_run_all_tests.py` runs 24 of them by default, and `--exe` adds the two that need a build (`_frozen_exe_test.py`, `_installed_app_test.py`). Run `.\.venv\Scripts\python.exe _run_all_tests.py` (`--skip-desktop` leaves out the webcam, screen-region and drag-and-drop tests, which use the real desktop; the drag-and-drop test moves the mouse by itself for a few seconds). Tests open their windows off-screen and never show a real message box or file dialog: dialogs are replaced by recorders, and an unexpected error box fails the test. A test that leaves a process running fails too.
 
 | Script | Covers |
 |---|---|
@@ -83,7 +100,7 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_bulk_test.py`, `_bulk_ui_test.py` | CSV reading and per-row errors, the 1000-row limit, file names, the worker, Cancel, formats, progress without a frozen window |
 | `_theme_contrast_test.py` | contrast of every theme and every widget, live theme switching |
 | `_theme_transition_test.py` | the liquid blob theme transition: mask maths and patch order, snapshot of the app window only, the Settings page (a click on a theme card animates the whole window), skip on click / key / move / resize / minimize / focus loss, changes never overlap, the log reason of every start and skip, off switches, frame-time benchmark |
-| `_theme_leak_test.py` | theme leak audit: ~50 switch sequences (animation on and off, skipped, interrupted, quick, from the Settings page) on every page; no widget and no painted area may keep a colour of another theme |
+| `_theme_leak_test.py` | theme leak audit: 65 switch sequences (30 with the animation, 35 without; skipped, interrupted, quick, from the Settings page) on every page; no widget and no painted area may keep a colour of another theme |
 | `_settings_persist_test.py` | the Settings page: Apply writes every setting atomically, Cancel and "Don't save" write nothing, leaving the page or closing the app with changes asks "Save changes?", a failed write is reported, the next launch uses the saved theme, the footer is always visible at 100 / 125 / 150 % |
 | `_status_dot_test.py` | the card status dot (dim, then bright with a glow once there is a result) on every page, the fade, and the sidebar's theme dot in every theme |
 | `_defaults_test.py` | a fresh install: intro animation on, history on, WiFi passwords off |
@@ -93,6 +110,8 @@ Run from the repository root with the venv's Python. `.\.venv\Scripts\python.exe
 | `_dnd_test.py` | drag and drop fallback, and real OLE drops (needs `tkinterdnd2`) |
 | `_cv2_missing_test.py` | OpenCV loads lazily; if it cannot load (Windows N without the Media Feature Pack) the app starts, Generate works, Scan/Camera show a clear message and the cause is logged |
 | `_frozen_exe_test.py` | the built exe: PerMonitorV2 DPI awareness, real Screen Region scan at the PC's display scaling, clean exit (build first) |
+| `_installed_app_test.py` | drives the real app window (the built exe, or the installed Store package): Generate a code, scan it back, close; moves the mouse and types, window-only capture (build first) |
+| `packaging\msix\install_test.ps1` | not run by `_run_all_tests.py`; from an Administrator PowerShell: signs a copy of the MSIX with a throw-away certificate, runs the Windows App Certification Kit (WACK), installs the copy, runs `_installed_app_test.py` in it, then uninstalls and removes the certificate |
 
 Screenshots are made by two tools that capture only the app's own window (never the screen) with throw-away settings: `_theme_shots.py <folder>` (Generate, Scan, History, Bulk Create, Settings and the colour picker in every theme) and `_store_shots.py <folder>` (the 1920 x 1140 Store pictures in `assets/images`).
 
@@ -115,7 +134,7 @@ Python · CustomTkinter · Pillow · NumPy (intro renderer) · OpenCV (`cv2.QRCo
 Mosaiq-QR-Studio/
 ├── main.py, config.py
 ├── ui/                  # app shell, pages (incl. Settings), components, dialogs
-│   ├── pages/           # Generate, Scan, History, Bulk Create
+│   ├── pages/           # Generate, Scan, History, Bulk Create, Settings
 │   ├── splash.py        # animated intro (NumPy renderer)
 │   └── brand_logo.py    # logo and app icon, drawn in code
 ├── utils/               # QR generator and renderer, export, history, bulk, payload types, scanner, camera, screen capture, clipboard, themes, settings
@@ -134,6 +153,11 @@ Standing rules (never stop processes by name or in bulk, only your own PIDs; win
 
 ## Roadmap
 
+Planned for 2.3:
+
+- Faster theme refresh
+- Faster first scan (OpenCV's cold load takes about 3.5 s)
+- Quicker Dark ↔ Light switch
 - More QR types and templates
 
 ## Author
