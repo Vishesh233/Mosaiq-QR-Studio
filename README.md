@@ -160,6 +160,10 @@ Planned for 2.3:
 - Quicker Dark ↔ Light switch
 - More QR types and templates
 
+## License
+
+Released under the [MIT license](LICENSE). Copyright (c) 2026 Vishesh Khanna.
+
 ## Author
 
 **Vishesh Khanna**
